@@ -182,10 +182,10 @@ export const changePassword = async (req, res) => {
 };
 
 //logoutUser
-export const logoutUser = async (req, res) => {
-    try {
-        return sendSuccessResponse(res, "User logout successfully...✅");
-    } catch (error) {
-        return sendErrorResponse(res, 400, error.message);
-    }
-};
+// export const logoutUser = async (req, res) => {
+//     try {
+//         return sendSuccessResponse(res, "User logout successfully...✅");
+//     } catch (error) {
+//         return sendErrorResponse(res, 400, error.message);
+//     }
+// };
