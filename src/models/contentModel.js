@@ -1,14 +1,15 @@
 import mongoose from "mongoose";
 
 export const contentSchema = mongoose.Schema({
-    video_name: {
-        type: String
-    },
     content_video: {
         type: String
     },
-    level_name: {
+    content_image: {
         type: String
+    },
+    level_name: {
+        type: String,
+        enum: ["Beginner", "Advanced", "Intermediate"]
     },
     video_title: {
         type: String

@@ -6,63 +6,111 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Configure storage
+// 🗂️ Define storage destination based on field name
+
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        // Create different folders based on field name
-        let uploadPath = 'public/images';
+        let uploadPath = 'public/';
 
-        if (file.fieldname === 'classCategory_image') {
-            uploadPath = 'public/classCategory_image';
+        if (file.fieldname === 'image') {
+            uploadPath += 'images';
+        } else if (file.fieldname === 'classCategory_image') {
+            uploadPath += 'classCategory_images';
+        } else if (file.fieldname === 'content_image') {
+            uploadPath += 'content_images';
+        } else if (file.fieldname === 'content_video') {
+            uploadPath += 'content_videos';
+        } else {
+            return cb(new Error("Invalid field name"), null);
         }
 
-        // Create directory if it doesn't exist
-        if (!fs.existsSync(uploadPath)) {
-            fs.mkdirSync(uploadPath, { recursive: true });
-        }
-
+        fs.mkdirSync(uploadPath, { recursive: true });
         cb(null, uploadPath);
     },
     filename: function (req, file, cb) {
-        cb(null, Date.now() + path.extname(file.originalname));
+        const ext = path.extname(file.originalname);
+        const filename = `${Date.now()}${ext}`;
+        cb(null, filename);
     }
 });
 
-// File filter function
+// ✅ File validation
 const fileFilter = (req, file, cb) => {
-    // Accept all files that are being uploaded as 'image'
-    const allowedFieldNames = ['image', 'classCategory_image'];
+    const isImage = file.mimetype.startsWith('image/');
+    const isVideo = file.mimetype.startsWith('video/');
+    const isOctetStream = file.mimetype === 'application/octet-stream';
+    const ext = path.extname(file.originalname).toLowerCase();
+    const isJfifExt = ext === '.jfif';
 
-    if (allowedFieldNames.includes(file.fieldname)) {
-        cb(null, true);
-    } else {
-        cb(new Error(`Please upload a file with one of these field names: ${allowedFieldNames.join(', ')}`));
+    const allowedImageFields = ['image', 'classCategory_image', 'content_image'];
+    const allowedVideoFields = ['content_video'];
+
+    if (allowedImageFields.includes(file.fieldname)) {
+        return (isImage || isOctetStream || isJfifExt) ? cb(null, true) : cb(new Error('Invalid image file.'));
     }
+
+    if (allowedVideoFields.includes(file.fieldname)) {
+        return isVideo ? cb(null, true) : cb(new Error('Invalid video file.'));
+    }
+
+    return cb(new Error(`Invalid field name for file upload: ${file.fieldname}`));
 };
 
-// Create multer instance
+// ✅ Multer instance
 const upload = multer({
     storage: storage,
-    fileFilter: fileFilter
+    fileFilter: fileFilter,
+    limits: { fileSize: 1024 * 1024 * 200 } // 200MB
 });
 
-// Create upload handlers
-const uploadHandlers = {
-    single: (fieldName) => {
-        return upload.single(fieldName);
+// ✅ Convert JFIF to JPEG for image uploads
+const convertJfifToJpeg = async (req, res, next) => {
+    try {
+        if (!req.files) return next();
+
+        const conversionPromises = [];
+
+        for (const fieldName in req.files) {
+            const files = req.files[fieldName];
+            for (const file of files) {
+                const isImageField = ['image', 'content_image'].includes(fieldName);
+                if (!isImageField) continue;
+
+                const ext = path.extname(file.originalname).toLowerCase();
+                const isConvertible = ext === '.jfif' || file.mimetype === 'image/jfif' || file.mimetype === 'application/octet-stream';
+
+                if (isConvertible) {
+                    const promise = (async () => {
+                        const inputPath = file.path;
+                        const outputPath = inputPath.replace(/\.[^/.]+$/, "") + ".jpeg";
+
+                        await sharp(inputPath).jpeg().toFile(outputPath);
+
+                        if (fs.existsSync(inputPath)) {
+                            fs.unlinkSync(inputPath);
+                        }
+
+                        file.path = outputPath;
+                        file.filename = path.basename(outputPath);
+                        file.mimetype = 'image/jpeg';
+                    })();
+                    conversionPromises.push(promise);
+                }
+            }
+        }
+
+        await Promise.all(conversionPromises);
+        next();
+    } catch (err) {
+        console.error('Error in convertJfifToJpeg:', err);
+        next(err);
     }
 };
 
-// Error handling middleware
+// ✅ Error handling middleware
 const handleMulterError = (err, req, res, next) => {
     console.log('Upload error:', err);
-
-    if (err instanceof multer.MulterError) {
-        return res.status(400).json({
-            success: false,
-            message: err.message
-        });
-    } else if (err) {
+    if (err instanceof multer.MulterError || err) {
         return res.status(400).json({
             success: false,
             message: err.message
@@ -71,35 +119,17 @@ const handleMulterError = (err, req, res, next) => {
     next();
 };
 
-const convertJfifToJpeg = async (req, res, next) => {
-    try {
-        if (!req.file) return next();
-
-        const file = req.file;
-        const ext = path.extname(file.originalname).toLowerCase();
-
-        if (ext === '.jfif' || file.mimetype === 'image/jfif' || file.mimetype === 'application/octet-stream') {
-            const inputPath = file.path;
-            const outputPath = inputPath.replace('.jfif', '.jpg');
-
-            await sharp(inputPath)
-                .jpeg()
-                .toFile(outputPath);
-
-            // Update the file path in req.file
-            file.path = outputPath;
-            file.filename = path.basename(outputPath);
-
-            // Delete the original JFIF file
-            fs.unlinkSync(inputPath);
-        }
-
-        next();
-    } catch (err) {
-        console.error('Error in convertJfifToJpeg:', err);
-        next(err);
-    }
+// ✅ Exported upload handlers
+const uploadHandlers = {
+    single: (fieldName) => upload.single(fieldName),
+    fields: (fields) => upload.fields(fields),
 };
 
-export { upload, uploadHandlers, handleMulterError, convertJfifToJpeg };
-export default uploadHandlers;
+// ✅ Final export
+export const uploadMedia = upload.fields([
+    { name: 'image', maxCount: 1 },
+    { name: 'content_image', maxCount: 1 },
+    { name: 'content_video', maxCount: 1 }
+]);
+
+export { upload, uploadHandlers, convertJfifToJpeg, handleMulterError };

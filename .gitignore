@@ -1,2 +1,6 @@
 /node_modules
 .env
+public/images
+public/classCategory_images
+public/content_images
+public/content_videos

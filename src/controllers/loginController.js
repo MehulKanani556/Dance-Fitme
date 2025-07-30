@@ -10,6 +10,7 @@ export const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
 
+
         if (!email || !password) {
             return sendBadRequestResponse(res, "Email and password are required");
         }
@@ -156,7 +157,7 @@ export const changePassword = async (req, res) => {
         if (!user) {
             return sendErrorResponse(res, 404, "User not found with the provided ID");
         }
-        
+
         const isMatch = await bcrypt.compare(currentPassword, user.password);
         if (!isMatch) {
             return sendBadRequestResponse(res, "Current password is incorrect.");
