@@ -23,10 +23,18 @@ export const contentSchema = mongoose.Schema({
     burn: {
         type: String
     },
-    classCategoryId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "ClassCategory"
-    }
+    classCategoryId: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "ClassCategory"
+        }
+    ],
+    styleId: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Style"
+        }
+    ]
 
 }, { timestamps: true })
 

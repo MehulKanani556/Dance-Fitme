@@ -63,7 +63,7 @@ export const getClassCategoryById = async (req, res) => {
             return sendBadRequestResponse(res, "Invalid ClassCategory ID");
         }
 
-        const classCategory = await ClassCategory.findById(id)
+        const classCategory = await ClassCategory.finDdById(id)
         if (!classCategory) {
             return sendErrorResponse(res, 404, "ClassCategory not found");
         }
@@ -80,34 +80,51 @@ export const updateClassCategory = async (req, res) => {
         const { id } = req.params;
         const { classCategory_title } = req.body;
 
+        // ✅ Validate ID
         if (!mongoose.Types.ObjectId.isValid(id)) {
             if (req.file) fs.unlinkSync(path.resolve(req.file.path));
             return sendBadRequestResponse(res, "Invalid ClassCategory ID");
         }
 
+        // ✅ Fetch existing document
         const existingClassCategory = await ClassCategory.findById(id);
         if (!existingClassCategory) {
             if (req.file) fs.unlinkSync(path.resolve(req.file.path));
             return sendErrorResponse(res, 404, "ClassCategory not found");
         }
 
+        // ✅ Handle Image Update
         if (req.file) {
-            const newImagePath = `/public/classCategory_image/${path.basename(req.file.path)}`;
+            const newImagePath = `/public/classCategory_images/${req.file.filename}`;
+
+            // ✅ Delete old image if it exists and is different
             if (existingClassCategory.classCategory_image) {
-                const oldImagePath = path.join(process.cwd(), existingClassCategory.classCategory_image);
-                if (fs.existsSync(oldImagePath)) {
+                const oldImageName = existingClassCategory.classCategory_image.split("/").pop();
+                const oldImagePath = path.join("public", "classCategory_images", oldImageName);
+
+                if (
+                    fs.existsSync(oldImagePath) &&
+                    oldImageName !== req.file.filename
+                ) {
                     fs.unlinkSync(oldImagePath);
                 }
             }
+
+            // ✅ Set new image path
             existingClassCategory.classCategory_image = newImagePath;
         }
 
-        if (classCategory_title) existingClassCategory.classCategory_title = classCategory_title;
+        // ✅ Update title if provided
+        if (classCategory_title) {
+            existingClassCategory.classCategory_title = classCategory_title;
+        }
 
+        // ✅ Save updated document
         await existingClassCategory.save();
 
         return sendSuccessResponse(res, "ClassCategory updated successfully", existingClassCategory);
     } catch (error) {
+        // ✅ Cleanup on error
         if (req.file) fs.unlinkSync(path.resolve(req.file.path));
         return ThrowError(res, 500, error.message);
     }

@@ -20,6 +20,8 @@ const storage = multer.diskStorage({
             uploadPath += 'content_images';
         } else if (file.fieldname === 'content_video') {
             uploadPath += 'content_videos';
+        } else if (file.fieldname === 'style_image') {
+            uploadPath += 'style_images';
         } else {
             return cb(new Error("Invalid field name"), null);
         }
@@ -27,10 +29,10 @@ const storage = multer.diskStorage({
         fs.mkdirSync(uploadPath, { recursive: true });
         cb(null, uploadPath);
     },
-    filename: function (req, file, cb) {
+    filename: (req, file, cb) => {
         const ext = path.extname(file.originalname);
-        const filename = `${Date.now()}${ext}`;
-        cb(null, filename);
+        const fileName = `${Date.now()}${ext}`;
+        cb(null, fileName);
     }
 });
 
@@ -42,7 +44,7 @@ const fileFilter = (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     const isJfifExt = ext === '.jfif';
 
-    const allowedImageFields = ['image', 'classCategory_image', 'content_image'];
+    const allowedImageFields = ['image', 'classCategory_image', 'content_image', 'style_image'];
     const allowedVideoFields = ['content_video'];
 
     if (allowedImageFields.includes(file.fieldname)) {
@@ -66,38 +68,37 @@ const upload = multer({
 // ✅ Convert JFIF to JPEG for image uploads
 const convertJfifToJpeg = async (req, res, next) => {
     try {
-        if (!req.files) return next();
+        const filesToConvert = [];
 
-        const conversionPromises = [];
+        if (req.file) {
+            filesToConvert.push(req.file); // Single upload
+        }
 
-        for (const fieldName in req.files) {
-            const files = req.files[fieldName];
-            for (const file of files) {
-                const isImageField = ['image', 'content_image'].includes(fieldName);
-                if (!isImageField) continue;
-
-                const ext = path.extname(file.originalname).toLowerCase();
-                const isConvertible = ext === '.jfif' || file.mimetype === 'image/jfif' || file.mimetype === 'application/octet-stream';
-
-                if (isConvertible) {
-                    const promise = (async () => {
-                        const inputPath = file.path;
-                        const outputPath = inputPath.replace(/\.[^/.]+$/, "") + ".jpeg";
-
-                        await sharp(inputPath).jpeg().toFile(outputPath);
-
-                        if (fs.existsSync(inputPath)) {
-                            fs.unlinkSync(inputPath);
-                        }
-
-                        file.path = outputPath;
-                        file.filename = path.basename(outputPath);
-                        file.mimetype = 'image/jpeg';
-                    })();
-                    conversionPromises.push(promise);
-                }
+        if (req.files) {
+            for (const key in req.files) {
+                const fileArray = req.files[key];
+                fileArray.forEach(f => filesToConvert.push(f));
             }
         }
+
+        const conversionPromises = filesToConvert.map(async (file) => {
+            const ext = path.extname(file.originalname).toLowerCase();
+            const isConvertible = ext === '.jfif' || file.mimetype === 'image/jfif' || file.mimetype === 'application/octet-stream';
+
+            if (!isConvertible) return;
+
+            const inputPath = file.path;
+            const outputPath = inputPath.replace(/\.[^/.]+$/, "") + ".jpeg";
+
+            await sharp(inputPath).jpeg().toFile(outputPath);
+
+            if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+
+            // Update file object to point to new JPEG file
+            file.path = outputPath;
+            file.filename = path.basename(outputPath);
+            file.mimetype = 'image/jpeg';
+        });
 
         await Promise.all(conversionPromises);
         next();
@@ -106,6 +107,7 @@ const convertJfifToJpeg = async (req, res, next) => {
         next(err);
     }
 };
+
 
 // ✅ Error handling middleware
 const handleMulterError = (err, req, res, next) => {
