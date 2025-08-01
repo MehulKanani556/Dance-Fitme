@@ -463,3 +463,36 @@ export const getContentByBoxing = async (req, res) => {
     }
 
 };
+
+// Get All Just Released Content
+export const getJustReleasedContent = async (req, res) => {
+    try {
+        const content = await Content.find().sort({ createdAt: -1 })
+
+        if (!content || content.length === 0) {
+            return sendNotFoundResponse(res, "No any content found!!!")
+        }
+
+        return sendSuccessResponse(res, "Content fetched successfully...", content)
+    } catch (error) {
+        return ThrowError(res, 500, error.message)
+    }
+}
+
+// Get Best Dance Class
+export const getBestDanceClass = async (req, res) => {
+    try {
+        const bestDanceClass = await Content.find({
+            classCategoryId: { $ne: null },
+            styleId: { $ne: null }
+        }).populate('classCategoryId').populate('styleId')
+
+        if (!bestDanceClass || bestDanceClass.length === 0) {
+            return sendNotFoundResponse(res, "No any best dance class found...")
+        }
+
+        return sendSuccessResponse(res, "Best dance class fetched successfully", bestDanceClass)
+    } catch (error) {
+        return ThrowError(res, 500, error.message)
+    }
+}
