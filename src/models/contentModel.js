@@ -34,7 +34,14 @@ export const contentSchema = mongoose.Schema({
             type: mongoose.Schema.Types.ObjectId,
             ref: "Style"
         }
-    ]
+    ],
+    views: {
+        type: [{
+            userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            timestamp: { type: Date, default: Date.now }
+        }],
+        default: []
+    },
 
 }, { timestamps: true })
 

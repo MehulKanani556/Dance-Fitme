@@ -6,7 +6,7 @@ import { changePassword, forgotPassword, loginUser, resetPassword, VerifyEmail }
 // import { createPreferences, getUserPreferences, deleteUserPreferences, getAllUsersPreferences } from '../controllers/userPreferencesController.js';
 import { createPremiumPlan, getAllPremiumPlans, getPremiumPlanById, updatePremiumPlan, deletePremiumPlan } from '../controllers/premiumController.js';
 import { createClassCategory, deleteClassCategory, getAllClassCategory, getClassCategoryById, updateClassCategory } from '../controllers/classCategoryController.js';
-import { createContent, deleteContent, getAdvanced, getAllContent, getBeginner, getBestDanceClass, getContentByBoxing, getContentByClassCategoryId, getContentByDanceFitness, getContentByHipHop, getContentById, getContentByStyleId, getIntermediate, getJustReleasedContent, getNewArrivals, updateContent } from '../controllers/contentController.js';
+import { createContent, deleteContent, getAdvanced, getAllContent, getBeginner, getBestDanceClass, getContentByBoxing, getContentByClassCategoryId, getContentByDanceFitness, getContentByHipHop, getContentById, getContentByStyleId, getIntermediate, getJustReleasedContent, getNewArrivals, incrementContentViews, updateContent } from '../controllers/contentController.js';
 import { createStyle, deleteStyle, getAllStyle, getstyleById, updateStyle } from '../controllers/styleController.js';
 import { addRecord, createWeight, deleteWeight, getAllWeight, getWeightByUser, updateWeight } from '../controllers/weightController.js';
 import { createDailyGoal, deleteDailyGoal, getAllDailyGoals, getDailyGoalByUser, updateDailyGoal } from '../controllers/dailyGoalController.js';
@@ -74,6 +74,7 @@ indexRouter.get('/getContentByHipHop', UserAuth, getContentByHipHop);
 indexRouter.get('/getContentByBoxing', UserAuth, getContentByBoxing);
 indexRouter.get('/getJustReleasedContent', UserAuth, getJustReleasedContent);
 indexRouter.get('/getBestDanceClass', UserAuth, getBestDanceClass);
+indexRouter.post('/incrementContentViews/:contentId', UserAuth, incrementContentViews);
 
 // Weight Routes
 indexRouter.post('/createWeight', UserAuth, isUser, createWeight);

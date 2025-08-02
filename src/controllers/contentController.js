@@ -485,7 +485,7 @@ export const getBestDanceClass = async (req, res) => {
         const bestDanceClass = await Content.find({
             classCategoryId: { $ne: null },
             styleId: { $ne: null }
-        }).populate('classCategoryId').populate('styleId')
+        }).sort({ views: -1 }).populate('classCategoryId').populate('styleId')
 
         if (!bestDanceClass || bestDanceClass.length === 0) {
             return sendNotFoundResponse(res, "No any best dance class found...")
@@ -496,3 +496,67 @@ export const getBestDanceClass = async (req, res) => {
         return ThrowError(res, 500, error.message)
     }
 }
+
+// Increment Content views
+export const incrementContentViews = async (req, res) => {
+    try {
+        if (!req.user) {
+            return ThrowError(res, 401, "User not authenticated");
+        }
+
+        const { contentId } = req.params;
+        const userId = req.user._id;
+
+        if (!mongoose.Types.ObjectId.isValid(contentId)) {
+            return ThrowError(res, 400, 'Invalid Content ID');
+        }
+
+        const content = await Content.findById(contentId);
+        if (!content) {
+            return ThrowError(res, 404, 'Content not found');
+        }
+
+        // Ensure views is an array and filter out any invalid entries
+        if (!Array.isArray(content.views)) {
+            content.views = [];
+        } else {
+            content.views = content.views.filter(view => typeof view === 'object' && view !== null && view.userId && view.timestamp);
+        }
+
+        // Check if user has ever viewed this content
+        const hasViewed = content.views.some(view => view.userId.toString() === userId.toString());
+
+        if (hasViewed) {
+            return res.status(200).json({
+                status: true,
+                message: "User has already viewed this content",
+                data: {
+                    contentId: content._id,
+                    title: content.title,
+                    views: content.views.length
+                }
+            });
+        }
+
+        // Add new view
+        content.views.push({
+            userId: userId,
+            timestamp: new Date()
+        });
+
+        await content.save();
+
+        return res.status(200).json({
+            status: true,
+            message: "View count updated successfully",
+            data: {
+                contentId: content._id,
+                title: content.title,
+                views: content.views.length
+            }
+        });
+    } catch (error) {
+        console.error('Error in incrementContentViews:', error);
+        return ThrowError(res, 500, error.message);
+    }
+};

@@ -104,28 +104,41 @@ export const getDailyStats = async (req, res) => {
 export const getWeeklyStats = async (req, res) => {
     try {
         const userId = req.user._id;
-        const start = moment().startOf('isoWeek').toDate();
-        const end = moment().endOf('isoWeek').toDate();
+        const start = moment().startOf("isoWeek").toDate(); // Monday
+        const end = moment().endOf("isoWeek").toDate();     // Sunday
 
         const stats = await DanceStats.find({
             userId,
             date: { $gte: start, $lte: end },
-        });
+        }).sort({ date: 1 });
 
-        const total = stats.reduce((acc, stat) => {
-            acc.danceTimeInMin += stat.danceTimeInMin;
-            acc.caloriesBurned += stat.caloriesBurned;
-            acc.danceDays += stat.isDanceDay ? 1 : 0;
-            return acc;
-        }, { danceTimeInMin: 0, caloriesBurned: 0, danceDays: 0 });
+        const dailyStats = stats.map((stat) => ({
+            date: moment(stat.date).format("YYYY-MM-DD"),
+            danceTimeInMin: stat.danceTimeInMin,
+            caloriesBurned: stat.caloriesBurned,
+        }));
+
+        const total = stats.reduce(
+            (acc, stat) => {
+                acc.totalDanceTime += stat.danceTimeInMin;
+                acc.totalCaloriesBurned += stat.caloriesBurned;
+                return acc;
+            },
+            { totalDanceTime: 0, totalCaloriesBurned: 0 }
+        );
 
         return res.status(200).json({
             success: true,
-            message: "Weekly stats fetched",
-            result: total,
+            message: "Weekly stats fetched successfully.",
+            result: dailyStats,
+            ...total,
         });
     } catch (err) {
-        return res.status(500).json({ success: false, message: "Server error" });
+        console.error(err);
+        return res.status(500).json({
+            success: false,
+            message: "Server error",
+        });
     }
 };
 
@@ -138,19 +151,23 @@ export const getMonthlyStats = async (req, res) => {
         const stats = await DanceStats.find({
             userId,
             date: { $gte: start, $lte: end },
-        });
+        }).sort({ date: 1 });
 
-        const total = stats.reduce((acc, stat) => {
-            acc.danceTimeInMin += stat.danceTimeInMin;
-            acc.caloriesBurned += stat.caloriesBurned;
-            acc.danceDays += stat.isDanceDay ? 1 : 0;
-            return acc;
-        }, { danceTimeInMin: 0, caloriesBurned: 0, danceDays: 0 });
+        const result = stats.map(stat => ({
+            date: moment(stat.date).format("YYYY-MM-DD"),
+            danceTimeInMin: stat.danceTimeInMin,
+            caloriesBurned: stat.caloriesBurned,
+        }));
+
+        const totalDanceTime = result.reduce((acc, stat) => acc + stat.danceTimeInMin, 0);
+        const totalCaloriesBurned = result.reduce((acc, stat) => acc + stat.caloriesBurned, 0);
 
         return res.status(200).json({
             success: true,
-            message: "Monthly stats fetched",
-            result: total,
+            message: "Monthly stats fetched successfully.",
+            result,
+            totalDanceTime,
+            totalCaloriesBurned
         });
     } catch (err) {
         return res.status(500).json({ success: false, message: "Server error" });
@@ -160,20 +177,64 @@ export const getMonthlyStats = async (req, res) => {
 export const getTotalStats = async (req, res) => {
     try {
         const userId = req.user._id;
+        const stats = await DanceStats.find({ userId }).sort({ date: 1 });
 
-        const stats = await DanceStats.find({ userId });
+        let totalDanceTimeInMin = 0;
+        let totalCaloriesBurned = 0;
+        let danceDays = new Set();
+        let currentStreak = 0;
+        let longestStreak = 0;
 
-        const total = stats.reduce((acc, stat) => {
-            acc.danceTimeInMin += stat.danceTimeInMin;
-            acc.caloriesBurned += stat.caloriesBurned;
-            acc.danceDays += stat.isDanceDay ? 1 : 0;
-            return acc;
-        }, { danceTimeInMin: 0, caloriesBurned: 0, danceDays: 0 });
+        let previousDate = null;
+        let tempStreak = 0;
+
+        stats.forEach(stat => {
+            const date = moment(stat.date).format("YYYY-MM-DD");
+            danceDays.add(date);
+            totalDanceTimeInMin += stat.danceTimeInMin;
+            totalCaloriesBurned += stat.caloriesBurned;
+
+            // Streak logic
+            if (stat.danceTimeInMin > 0) {
+                if (previousDate) {
+                    const diff = moment(date).diff(moment(previousDate), 'days');
+                    if (diff === 1) {
+                        tempStreak += 1;
+                    } else if (diff === 0) {
+                        // same day - continue
+                    } else {
+                        tempStreak = 1;
+                    }
+                } else {
+                    tempStreak = 1;
+                }
+                previousDate = date;
+            } else {
+                tempStreak = 0;
+                previousDate = null;
+            }
+            longestStreak = Math.max(longestStreak, tempStreak);
+        });
+
+        // current streak
+        const today = moment().format("YYYY-MM-DD");
+        let day = moment(today);
+        currentStreak = 0;
+        while (danceDays.has(day.format("YYYY-MM-DD"))) {
+            currentStreak++;
+            day.subtract(1, 'days');
+        }
 
         return res.status(200).json({
             success: true,
-            message: "Total stats fetched",
-            result: total,
+            message: "Total stats fetched successfully.",
+            result: {
+                totalDanceDays: danceDays.size,
+                totalDanceTimeInMin,
+                totalCaloriesBurned,
+                currentStreak,
+                longestStreak
+            }
         });
     } catch (err) {
         return res.status(500).json({ success: false, message: "Server error" });
