@@ -1,8 +1,10 @@
 import mongoose from "mongoose";
 import { ThrowError } from "../utils/ErrorUtils.js";
 import Content from "../models/contentModel.js";
-import { sendErrorResponse, sendNotFoundResponse, sendSuccessResponse } from "../utils/ResponseUtils.js";
+import { sendBadRequestResponse, sendErrorResponse, sendNotFoundResponse, sendSuccessResponse } from "../utils/ResponseUtils.js";
 import ClassCategory from "../models/classCategoryModel.js";
+import Payment from "../models/paymentModel.js";
+import PlanDetails from "../models/planDetailsModel.js";
 import Style from "../models/styleModel.js";
 import fs from "fs"
 import path from "path";
@@ -496,6 +498,71 @@ export const getBestDanceClass = async (req, res) => {
         return ThrowError(res, 500, error.message)
     }
 }
+
+// Get TrendingPlan
+export const getTrendingPlans = async (req, res) => {
+    try {
+        const planCounts = await Payment.aggregate([
+            {
+                $match: {
+                    planDetails: { $exists: true, $ne: null },
+                },
+            },
+            {
+                $group: {
+                    _id: "$planDetails",
+                    purchaseCount: { $sum: 1 },
+                },
+            },
+        ]);
+
+        const countMap = {};
+        planCounts.forEach((item) => {
+            countMap[item._id.toString()] = item.purchaseCount;
+        });
+
+        const allPlans = await PlanDetails.find({});
+
+        // Merge purchaseCount and sort
+        const merged = allPlans.map((plan) => {
+            const planObj = plan.toObject();
+            planObj.purchaseCount = countMap[plan._id.toString()] || 0;
+            return planObj;
+        });
+
+        // Sort descending by purchaseCount
+        const topThree = merged.sort((a, b) => b.purchaseCount - a.purchaseCount).slice(0, 3);
+
+        return sendSuccessResponse(res, "Trending PlanDetails fetched", topThree);
+    } catch (error) {
+        return sendBadRequestResponse(res, error.message);
+    }
+};
+
+export const getDailyContentVideos = async (req, res) => {
+    try {
+        // Get all content with a video
+        const videoContents = await Content.find({ content_video: { $ne: null } });
+
+        if (videoContents.length === 0) {
+            return sendSuccessResponse(res, "No video content available today", []);
+        }
+
+        // Use current day to determine rotation index
+        const today = new Date();
+        const dayNumber = today.getDate(); // 1 to 31
+        const startIndex = (dayNumber * 2) % videoContents.length;
+
+        // Select 2 videos based on day
+        const selectedVideos = videoContents
+            .slice(startIndex, startIndex + 2)
+            .concat(videoContents.slice(0, Math.max(0, startIndex + 2 - videoContents.length)));
+
+        return sendSuccessResponse(res, "Today's content videos", selectedVideos);
+    } catch (error) {
+        return ThrowError(res, 500, error.message);
+    }
+};
 
 // Increment Content views
 export const incrementContentViews = async (req, res) => {

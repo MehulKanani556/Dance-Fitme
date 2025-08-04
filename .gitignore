@@ -1,3 +1,4 @@
 /node_modules
 .env
 public/content_videos
+public/plan_videos

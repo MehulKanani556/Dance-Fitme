@@ -6,11 +6,14 @@ import { changePassword, forgotPassword, loginUser, resetPassword, VerifyEmail }
 // import { createPreferences, getUserPreferences, deleteUserPreferences, getAllUsersPreferences } from '../controllers/userPreferencesController.js';
 import { createPremiumPlan, getAllPremiumPlans, getPremiumPlanById, updatePremiumPlan, deletePremiumPlan } from '../controllers/premiumController.js';
 import { createClassCategory, deleteClassCategory, getAllClassCategory, getClassCategoryById, updateClassCategory } from '../controllers/classCategoryController.js';
-import { createContent, deleteContent, getAdvanced, getAllContent, getBeginner, getBestDanceClass, getContentByBoxing, getContentByClassCategoryId, getContentByDanceFitness, getContentByHipHop, getContentById, getContentByStyleId, getIntermediate, getJustReleasedContent, getNewArrivals, incrementContentViews, updateContent } from '../controllers/contentController.js';
+import { createContent, deleteContent, getAdvanced, getAllContent, getBeginner, getBestDanceClass, getContentByBoxing, getContentByClassCategoryId, getContentByDanceFitness, getContentByHipHop, getContentById, getContentByStyleId, getDailyContentVideos, getIntermediate, getJustReleasedContent, getNewArrivals, getTrendingPlans, incrementContentViews, updateContent } from '../controllers/contentController.js';
 import { createStyle, deleteStyle, getAllStyle, getstyleById, updateStyle } from '../controllers/styleController.js';
 import { addRecord, createWeight, deleteWeight, getAllWeight, getWeightByUser, updateWeight } from '../controllers/weightController.js';
 import { createDailyGoal, deleteDailyGoal, getAllDailyGoals, getDailyGoalByUser, updateDailyGoal } from '../controllers/dailyGoalController.js';
 import { getDailyStats, getMonthlyStats, getTotalStats, getWeeklyStats, recordDanceSession } from '../controllers/danceStatsController.js';
+import { createPlan, deletePlanDetails, getAllPlanDetails, getPlanDetailsById, updatePlanDetails } from '../controllers/planDetailsContrroller.js';
+import { createPlanVideo, deletePlanVideo, getAllPlanVideo, getPlanVideoById, getPlanVideoByPlanDetailsId, updatePlanVideo } from '../controllers/planVideoController.js';
+import { createPayment, deletePayment, getAllPayments, getMySubscription, getPaymentById, updatePayment } from '../controllers/paymentController.js';
 
 const indexRouter = express.Router();
 
@@ -42,6 +45,15 @@ indexRouter.get('/getPremiumPlanById/:id', UserAuth, getPremiumPlanById);
 indexRouter.put('/updatePremiumPlan/:id', UserAuth, isAdmin, updatePremiumPlan);
 indexRouter.delete('/deletePremiumPlan/:id', UserAuth, isAdmin, deletePremiumPlan);
 
+//payment Routes
+indexRouter.post("/createPayment", UserAuth, isUser, createPayment)
+indexRouter.get("/getAllPayments", UserAuth, isAdmin, getAllPayments)
+indexRouter.get("/getPaymentById/:id", UserAuth, getPaymentById)
+indexRouter.put("/updatePayment/:id", UserAuth, isUser, updatePayment)
+indexRouter.delete("/deletePayment/:id", UserAuth, isUser, deletePayment)
+indexRouter.get('/getMySubscription', UserAuth, isUser, getMySubscription);
+
+
 // ClassCategory Routes
 indexRouter.post('/createClassCategory', UserAuth, isAdmin, upload.single("classCategory_image"), convertJfifToJpeg, createClassCategory);
 indexRouter.get('/getAllClassCategory', UserAuth, getAllClassCategory);
@@ -55,7 +67,6 @@ indexRouter.get('/getAllStyle', UserAuth, getAllStyle);
 indexRouter.get('/getstyleById/:id', UserAuth, getstyleById);
 indexRouter.put('/updateStyle/:id', UserAuth, isAdmin, upload.single("style_image"), convertJfifToJpeg, updateStyle);
 indexRouter.delete('/deleteStyle/:id', UserAuth, isAdmin, deleteStyle);
-
 
 // Content Routes
 indexRouter.post('/createContent', UserAuth, isAdmin, upload.fields([{ name: 'content_image', maxCount: 1 }, { name: 'content_video', maxCount: 1 }]), convertJfifToJpeg, createContent);
@@ -74,6 +85,8 @@ indexRouter.get('/getContentByHipHop', UserAuth, getContentByHipHop);
 indexRouter.get('/getContentByBoxing', UserAuth, getContentByBoxing);
 indexRouter.get('/getJustReleasedContent', UserAuth, getJustReleasedContent);
 indexRouter.get('/getBestDanceClass', UserAuth, getBestDanceClass);
+indexRouter.get('/getTrendingPlans', UserAuth, getTrendingPlans);
+indexRouter.get('/getDailyContentVideos', UserAuth, getDailyContentVideos);
 indexRouter.post('/incrementContentViews/:contentId', UserAuth, incrementContentViews);
 
 // Weight Routes
@@ -98,7 +111,20 @@ indexRouter.get('/getWeeklyStats', UserAuth, getWeeklyStats);
 indexRouter.get('/getMonthlyStats', UserAuth, getMonthlyStats);
 indexRouter.get('/getTotalStats', UserAuth, getTotalStats);
 
+// PlanDetails Routes
+indexRouter.post('/createPlan', UserAuth, isAdmin, upload.single("planDetails_image"), convertJfifToJpeg, createPlan);
+indexRouter.get('/getAllPlanDetails', UserAuth, getAllPlanDetails);
+indexRouter.get('/getPlanDetailsById/:id', UserAuth, getPlanDetailsById);
+indexRouter.put('/updatePlanDetails/:id', UserAuth, isAdmin, upload.single("planDetails_image"), convertJfifToJpeg, updatePlanDetails);
+indexRouter.delete('/deletePlanDetails/:id', UserAuth, isAdmin, deletePlanDetails);
+
+// PlanVideo Routes
+indexRouter.post('/createPlanVideo', UserAuth, isAdmin, upload.fields([{ name: 'plan_image', maxCount: 1 }, { name: 'plan_video', maxCount: 1 }]), convertJfifToJpeg, createPlanVideo);
+indexRouter.get('/getPlanVideoByPlanDetailsId/:planDetailsId', UserAuth, getPlanVideoByPlanDetailsId);
+indexRouter.get('/getAllPlanVideo', UserAuth, getAllPlanVideo);
+indexRouter.get('/getPlanVideoById/:id', UserAuth, getPlanVideoById);
+indexRouter.put('/updatePlanVideo/:id', UserAuth, isAdmin, upload.fields([{ name: 'plan_image', maxCount: 1 }, { name: 'plan_video', maxCount: 1 }]), convertJfifToJpeg, updatePlanVideo);
+indexRouter.delete('/deletePlanVideo/:id', UserAuth, isAdmin, deletePlanVideo);
 
 
-
-export default indexRouter;  
+export default indexRouter;

@@ -22,6 +22,12 @@ const storage = multer.diskStorage({
             uploadPath += 'content_videos';
         } else if (file.fieldname === 'style_image') {
             uploadPath += 'style_images';
+        } else if (file.fieldname === 'planDetails_image') {
+            uploadPath += 'planDetails_images';
+        } else if (file.fieldname === 'plan_image') {
+            uploadPath += 'plan_images';
+        } else if (file.fieldname === 'plan_video') {
+            uploadPath += 'plan_videos';
         } else {
             return cb(new Error("Invalid field name"), null);
         }
@@ -44,8 +50,8 @@ const fileFilter = (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     const isJfifExt = ext === '.jfif';
 
-    const allowedImageFields = ['image', 'classCategory_image', 'content_image', 'style_image'];
-    const allowedVideoFields = ['content_video'];
+    const allowedImageFields = ['image', 'classCategory_image', 'content_image', 'style_image', 'planDetails_image', 'plan_image'];
+    const allowedVideoFields = ['content_video', 'plan_video'];
 
     if (allowedImageFields.includes(file.fieldname)) {
         return (isImage || isOctetStream || isJfifExt) ? cb(null, true) : cb(new Error('Invalid image file.'));
@@ -131,7 +137,9 @@ const uploadHandlers = {
 export const uploadMedia = upload.fields([
     { name: 'image', maxCount: 1 },
     { name: 'content_image', maxCount: 1 },
-    { name: 'content_video', maxCount: 1 }
+    { name: 'content_video', maxCount: 1 },
+    { name: 'plan_image', maxCount: 1 },
+    { name: 'plan_video', maxCount: 1 }
 ]);
 
 export { upload, uploadHandlers, convertJfifToJpeg, handleMulterError };
