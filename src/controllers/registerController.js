@@ -48,10 +48,16 @@ export const createRegister = async (req, res) => {
             confirmed_password: hashedPassword,
             role,
             isAdmin: role === 'admin',
-            image: null
+            image: null,
         });
 
-        return sendCreatedResponse(res, "Registration successful", newRegister);
+        // Generate JWT token
+        const token = await newRegister.getJWT();
+        if (!token) {
+            return sendErrorResponse(res, 500, "Failed to generate token");
+        }
+
+        return sendCreatedResponse(res, "Registration successful", { newRegister, token: token });
     } catch (error) {
         return ThrowError(res, 500, error.message);
     }

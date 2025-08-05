@@ -1,12 +1,11 @@
 import express from 'express';
 import { upload, convertJfifToJpeg } from '../middlewares/imageupload.js';
-import { UserAuth, isAdmin, isUser } from '../middlewares/auth.js';
+import { UserAuth, isAdmin, isPremiumUser, isUser } from '../middlewares/auth.js';
 import { createRegister, getRegisterById, updateRegister, deleteRegister, getAllUsers } from '../controllers/registerController.js';
 import { changePassword, forgotPassword, loginUser, resetPassword, VerifyEmail } from '../controllers/loginController.js';
-// import { createPreferences, getUserPreferences, deleteUserPreferences, getAllUsersPreferences } from '../controllers/userPreferencesController.js';
 import { createPremiumPlan, getAllPremiumPlans, getPremiumPlanById, updatePremiumPlan, deletePremiumPlan } from '../controllers/premiumController.js';
 import { createClassCategory, deleteClassCategory, getAllClassCategory, getClassCategoryById, updateClassCategory } from '../controllers/classCategoryController.js';
-import { createContent, deleteContent, getAdvanced, getAllContent, getBeginner, getBestDanceClass, getContentByBoxing, getContentByClassCategoryId, getContentByDanceFitness, getContentByHipHop, getContentById, getContentByStyleId, getDailyContentVideos, getIntermediate, getJustReleasedContent, getNewArrivals, getTrendingPlans, incrementContentViews, updateContent } from '../controllers/contentController.js';
+import { createContent, deleteContent, getAdvanced, getAllContent, getBeginner, getBestDanceClass, getContentByBoxing, getContentByClassCategoryId, getContentByDanceFitness, getContentByHipHop, getContentById, getContentByStyleId, getIntermediate, getJustReleasedContent, getNewArrivals, getTrendingPlans, incrementContentViews, updateContent } from '../controllers/contentController.js';
 import { createStyle, deleteStyle, getAllStyle, getstyleById, updateStyle } from '../controllers/styleController.js';
 import { addRecord, createWeight, deleteWeight, getAllWeight, getWeightByUser, updateWeight } from '../controllers/weightController.js';
 import { createDailyGoal, deleteDailyGoal, getAllDailyGoals, getDailyGoalByUser, updateDailyGoal } from '../controllers/dailyGoalController.js';
@@ -14,6 +13,10 @@ import { getDailyStats, getMonthlyStats, getTotalStats, getWeeklyStats, recordDa
 import { createPlan, deletePlanDetails, getAllPlanDetails, getPlanDetailsById, updatePlanDetails } from '../controllers/planDetailsContrroller.js';
 import { createPlanVideo, deletePlanVideo, getAllPlanVideo, getPlanVideoById, getPlanVideoByPlanDetailsId, updatePlanVideo } from '../controllers/planVideoController.js';
 import { createPayment, deletePayment, getAllPayments, getMySubscription, getPaymentById, updatePayment } from '../controllers/paymentController.js';
+import { createOverviewVideo, deleteOverViewVideo, getAllOverViewVideos, getOverViewByDay, getOverViewById, updateOverViewVideo } from '../controllers/overViewController.js';
+import { createTerm, deleteTerms, getAllTerms, getTermsById, updateTerms } from '../controllers/termsController.js';
+import { createPrivacy, deletePrivacy, getAllPrivacy, getPrivacyById, updatePrivacy } from '../controllers/privacyController.js';
+import { createHelpSupport, deleteHelpSupport, getAllHelpSupport, getHelpSupportById, updateHelpSupport } from '../controllers/help&SupportController.js';
 
 const indexRouter = express.Router();
 
@@ -70,10 +73,10 @@ indexRouter.delete('/deleteStyle/:id', UserAuth, isAdmin, deleteStyle);
 
 // Content Routes
 indexRouter.post('/createContent', UserAuth, isAdmin, upload.fields([{ name: 'content_image', maxCount: 1 }, { name: 'content_video', maxCount: 1 }]), convertJfifToJpeg, createContent);
-indexRouter.get('/getContentByClassCategoryId/:classCategoryId', UserAuth, getContentByClassCategoryId);
-indexRouter.get('/getContentByStyleId/:styleId', UserAuth, getContentByStyleId);
-indexRouter.get('/getAllContent', UserAuth, getAllContent);
-indexRouter.get('/getContentById/:id', UserAuth, getContentById);
+indexRouter.get('/getContentByClassCategoryId/:classCategoryId', UserAuth, isPremiumUser, getContentByClassCategoryId);
+indexRouter.get('/getContentByStyleId/:styleId', UserAuth, isPremiumUser, getContentByStyleId);
+indexRouter.get('/getAllContent', UserAuth, isPremiumUser, getAllContent);
+indexRouter.get('/getContentById/:id', UserAuth, isPremiumUser, getContentById);
 indexRouter.put('/updateContent/:id', UserAuth, isAdmin, upload.fields([{ name: 'content_image', maxCount: 1 }, { name: 'content_video', maxCount: 1 }]), convertJfifToJpeg, updateContent);
 indexRouter.delete('/deleteContent/:id', UserAuth, isAdmin, deleteContent);
 indexRouter.get('/getNewArrivals', UserAuth, getNewArrivals);
@@ -86,8 +89,7 @@ indexRouter.get('/getContentByBoxing', UserAuth, getContentByBoxing);
 indexRouter.get('/getJustReleasedContent', UserAuth, getJustReleasedContent);
 indexRouter.get('/getBestDanceClass', UserAuth, getBestDanceClass);
 indexRouter.get('/getTrendingPlans', UserAuth, getTrendingPlans);
-indexRouter.get('/getDailyContentVideos', UserAuth, getDailyContentVideos);
-indexRouter.post('/incrementContentViews/:contentId', UserAuth, incrementContentViews);
+indexRouter.post('/incrementContentViews/:contentId', UserAuth, isPremiumUser, incrementContentViews);
 
 // Weight Routes
 indexRouter.post('/createWeight', UserAuth, isUser, createWeight);
@@ -120,11 +122,41 @@ indexRouter.delete('/deletePlanDetails/:id', UserAuth, isAdmin, deletePlanDetail
 
 // PlanVideo Routes
 indexRouter.post('/createPlanVideo', UserAuth, isAdmin, upload.fields([{ name: 'plan_image', maxCount: 1 }, { name: 'plan_video', maxCount: 1 }]), convertJfifToJpeg, createPlanVideo);
-indexRouter.get('/getPlanVideoByPlanDetailsId/:planDetailsId', UserAuth, getPlanVideoByPlanDetailsId);
-indexRouter.get('/getAllPlanVideo', UserAuth, getAllPlanVideo);
-indexRouter.get('/getPlanVideoById/:id', UserAuth, getPlanVideoById);
+indexRouter.get('/getPlanVideoByPlanDetailsId/:planDetailsId', UserAuth, isPremiumUser, getPlanVideoByPlanDetailsId);
+indexRouter.get('/getAllPlanVideo', UserAuth, isPremiumUser, getAllPlanVideo);
+indexRouter.get('/getPlanVideoById/:id', UserAuth, isPremiumUser, getPlanVideoById);
 indexRouter.put('/updatePlanVideo/:id', UserAuth, isAdmin, upload.fields([{ name: 'plan_image', maxCount: 1 }, { name: 'plan_video', maxCount: 1 }]), convertJfifToJpeg, updatePlanVideo);
 indexRouter.delete('/deletePlanVideo/:id', UserAuth, isAdmin, deletePlanVideo);
+
+// OverView Routes
+indexRouter.post('/createOverviewVideo', UserAuth, isAdmin, createOverviewVideo);
+indexRouter.get('/getAllOverViewVideos', UserAuth, isPremiumUser, getAllOverViewVideos);
+indexRouter.get('/getOverViewById/:id', UserAuth, isPremiumUser, getOverViewById);
+indexRouter.put('/updateOverViewVideo/:id', UserAuth, isAdmin, updateOverViewVideo);
+indexRouter.delete('/deleteOverViewVideo/:id', UserAuth, isAdmin, deleteOverViewVideo);
+indexRouter.get('/getOverViewByDay/:day_No', UserAuth, getOverViewByDay);
+
+// Terms Routes
+indexRouter.post('/createTerm', UserAuth, isAdmin, createTerm);
+indexRouter.get('/getAllTerms', UserAuth, getAllTerms);
+indexRouter.get('/getTermsById/:id', UserAuth, getTermsById);
+indexRouter.put('/updateTerms/:id', UserAuth, isAdmin, updateTerms);
+indexRouter.delete('/deleteTerms/:id', UserAuth, isAdmin, deleteTerms);
+
+// createPrivacy Routes
+indexRouter.post('/createPrivacy', UserAuth, isAdmin, createPrivacy);
+indexRouter.get('/getAllPrivacy', UserAuth, getAllPrivacy);
+indexRouter.get('/getPrivacyById/:id', UserAuth, getPrivacyById);
+indexRouter.put('/updatePrivacy/:id', UserAuth, isAdmin, updatePrivacy);
+indexRouter.delete('/deletePrivacy/:id', UserAuth, isAdmin, deletePrivacy);
+
+// HelpSupport Routes
+indexRouter.post('/createHelpSupport', UserAuth, isAdmin, createHelpSupport);
+indexRouter.get('/getAllHelpSupport', UserAuth, getAllHelpSupport);
+indexRouter.get('/getHelpSupportById/:id', UserAuth, getHelpSupportById);
+indexRouter.put('/updateHelpSupport/:id', UserAuth, isAdmin, updateHelpSupport);
+indexRouter.delete('/deleteHelpSupport/:id', UserAuth, isAdmin, deleteHelpSupport);
+
 
 
 export default indexRouter;

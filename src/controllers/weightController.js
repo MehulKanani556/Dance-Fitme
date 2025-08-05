@@ -58,7 +58,6 @@ export const updateWeight = async (req, res) => {
     try {
         const { starting, target, unit } = req.body;
 
-        // Step 1: Find the weight by ID first
         const weight = await Weight.findById(req.params.id);
 
         if (!weight) {
@@ -69,7 +68,24 @@ export const updateWeight = async (req, res) => {
             return sendBadRequestResponse(res, 403, "You are not authorized to update this weight...");
         }
 
-        // Step 3: Now update
+        // Step 1: Convert history if unit is being updated and it's different
+        if (unit && unit !== weight.unit) {
+            const conversionFactor = weight.unit === "kg" && unit === "lb" 
+                ? 2.20462 
+                : weight.unit === "lb" && unit === "kg" 
+                    ? 0.453592 
+                    : null;
+
+            if (conversionFactor) {
+                weight.history = weight.history.map((entry) => ({
+                    ...entry,
+                    value: parseFloat((entry.value * conversionFactor).toFixed(2)),
+                    unit: unit
+                }));
+            }
+        }
+
+        // Step 2: Update fields
         if (starting !== undefined) weight.starting = starting;
         if (target !== undefined) weight.target = target;
         if (unit !== undefined) weight.unit = unit;
@@ -80,8 +96,7 @@ export const updateWeight = async (req, res) => {
     } catch (error) {
         return ThrowError(res, 500, error.message);
     }
-
-}
+};
 
 export const deleteWeight = async (req, res) => {
     try {

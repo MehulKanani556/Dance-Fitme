@@ -533,34 +533,13 @@ export const getTrendingPlans = async (req, res) => {
         // Sort descending by purchaseCount
         const topThree = merged.sort((a, b) => b.purchaseCount - a.purchaseCount).slice(0, 3);
 
+        if (topThree.length === 0) {
+            return sendNotFoundResponse(res, "No any TrendingPlan fetched")
+        }
+
         return sendSuccessResponse(res, "Trending PlanDetails fetched", topThree);
     } catch (error) {
         return sendBadRequestResponse(res, error.message);
-    }
-};
-
-export const getDailyContentVideos = async (req, res) => {
-    try {
-        // Get all content with a video
-        const videoContents = await Content.find({ content_video: { $ne: null } });
-
-        if (videoContents.length === 0) {
-            return sendSuccessResponse(res, "No video content available today", []);
-        }
-
-        // Use current day to determine rotation index
-        const today = new Date();
-        const dayNumber = today.getDate(); // 1 to 31
-        const startIndex = (dayNumber * 2) % videoContents.length;
-
-        // Select 2 videos based on day
-        const selectedVideos = videoContents
-            .slice(startIndex, startIndex + 2)
-            .concat(videoContents.slice(0, Math.max(0, startIndex + 2 - videoContents.length)));
-
-        return sendSuccessResponse(res, "Today's content videos", selectedVideos);
-    } catch (error) {
-        return ThrowError(res, 500, error.message);
     }
 };
 

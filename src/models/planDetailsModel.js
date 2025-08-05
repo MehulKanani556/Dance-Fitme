@@ -22,7 +22,6 @@ const planDetailsSchema = mongoose.Schema({
     duration: {
         type: String,
         enum: ['Monthly', 'Yearly'],
-        required: true
     },
     planVideo: [
         {

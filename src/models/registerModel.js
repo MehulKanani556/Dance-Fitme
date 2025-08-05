@@ -71,7 +71,6 @@ registerSchema.methods.getJWT = async function () {
             { _id: this._id },
             process.env.JWT_SECRET,
             {
-                expiresIn: "8h",
                 issuer: 'dance-fitme',
                 audience: 'dance-fitme-users'
             }
