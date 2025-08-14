@@ -4,7 +4,13 @@ export const contentSchema = mongoose.Schema({
     content_video: {
         type: String
     },
+    content_video_key: {
+        type: String
+    },
     content_image: {
+        type: String
+    },
+    content_image_key: {
         type: String
     },
     level_name: {

@@ -4,6 +4,9 @@ const planDetailsSchema = mongoose.Schema({
     planDetails_image: {
         type: String
     },
+    planDetails_image_key: {
+        type: String
+    },
     plan_title: {
         type: String
     },

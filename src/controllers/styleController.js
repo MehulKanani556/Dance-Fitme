@@ -2,8 +2,33 @@ import mongoose from "mongoose";
 import { ThrowError } from "../utils/ErrorUtils.js";
 import Style from "../models/styleModel.js";
 import { sendBadRequestResponse, sendCreatedResponse, sendErrorResponse, sendSuccessResponse } from "../utils/ResponseUtils.js";
+import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import fs from "fs"
-import path from "path";
+
+const s3 = new S3Client({
+    region: process.env.S3_REGION || 'us-east-1',
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY?.trim(),
+        secretAccessKey: process.env.S3_SECRET_KEY?.trim(),
+    },
+});
+
+const publicUrlForKey = (key) => {
+    const cdn = process.env.CDN_BASE_URL?.replace(/\/$/, '');
+    if (cdn) return `${cdn}/${key}`;
+    const bucket = process.env.S3_BUCKET_NAME;
+    const region = process.env.S3_REGION || 'us-east-1';
+    return `https://${bucket}.s3.${region}.amazonaws.com/${encodeURI(key)}`;
+};
+
+const deleteS3KeyIfAny = async (key) => {
+    if (!key) return;
+    try {
+        await s3.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: key }));
+    } catch (e) {
+        console.error('S3 delete failed:', e.message);
+    }
+};
 
 
 // Create Style
@@ -23,18 +48,21 @@ export const createStyle = async (req, res) => {
         }
 
         let style_image = null;
-        if (req.file) {
-            style_image = `/public/style_images/${path.basename(req.file.path)}`; // ✅ same everywhere
+        let style_image_key = null;
+        if (req.file?.key) {
+            style_image = publicUrlForKey(req.file.key);
+            style_image_key = req.file.key;
         }
 
         const newStyle = await Style.create({
             style_title,
-            style_image
+            style_image,
+            style_image_key
         });
 
         return sendCreatedResponse(res, "Style added successfully", newStyle);
     } catch (error) {
-        if (req.file) fs.unlinkSync(path.resolve(req.file.path));
+        // nothing to clean up; uploads already in S3
         return ThrowError(res, 500, error.message);
     }
 };
@@ -80,30 +108,18 @@ export const updateStyle = async (req, res) => {
         const { style_title } = req.body;
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
             return sendBadRequestResponse(res, "Invalid Style ID");
         }
 
         const existingStyle = await Style.findById(id);
         if (!existingStyle) {
-            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
             return sendErrorResponse(res, 404, "Style not found");
         }
 
-        if (req.file) {
-            const newImagePath = `/public/style_images/${req.file.filename}`;
-
-            // Delete old image if different
-            if (existingStyle.style_image) {
-                const oldImageName = existingStyle.style_image.split("/").pop();
-                const oldImagePath = path.join("public", "style_images", oldImageName);
-
-                if (fs.existsSync(oldImagePath) && oldImageName !== req.file.filename) {
-                    fs.unlinkSync(oldImagePath);
-                }
-            }
-
-            existingStyle.style_image = newImagePath;
+        if (req.file?.key) {
+            await deleteS3KeyIfAny(existingStyle.style_image_key || (() => { try { const u = new URL(existingStyle.style_image); return u.pathname.replace(/^\//,''); } catch { return null; } })());
+            existingStyle.style_image = publicUrlForKey(req.file.key);
+            existingStyle.style_image_key = req.file.key;
         }
 
         if (style_title) existingStyle.style_title = style_title;
@@ -112,7 +128,6 @@ export const updateStyle = async (req, res) => {
 
         return sendSuccessResponse(res, "Style updated successfully", existingStyle);
     } catch (error) {
-        if (req.file) fs.unlinkSync(path.resolve(req.file.path));
         return ThrowError(res, 500, error.message);
     }
 };
@@ -132,10 +147,7 @@ export const deleteStyle = async (req, res) => {
         }
 
         if (style.style_image) {
-            const imagePath = path.join(process.cwd(), style.style_image);
-            if (fs.existsSync(imagePath)) {
-                fs.unlinkSync(imagePath);
-            }
+            await deleteS3KeyIfAny(style.style_image_key || (() => { try { const u = new URL(style.style_image); return u.pathname.replace(/^\//,''); } catch { return null; } })());
         }
 
         return sendSuccessResponse(res, "Style deleted successfully");

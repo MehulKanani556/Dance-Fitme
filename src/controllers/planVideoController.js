@@ -3,8 +3,32 @@ import { ThrowError } from "../utils/ErrorUtils.js";
 import { sendErrorResponse, sendNotFoundResponse, sendSuccessResponse } from "../utils/ResponseUtils.js";
 import PlanVideo from "../models/planVideoModel.js";
 import PlanDetails from "../models/planDetailsModel.js";
-import fs from "fs"
-import path from "path";
+import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
+
+const s3 = new S3Client({
+    region: process.env.S3_REGION || 'us-east-1',
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY?.trim(),
+        secretAccessKey: process.env.S3_SECRET_KEY?.trim(),
+    },
+});
+
+const publicUrlForKey = (key) => {
+    const cdn = process.env.CDN_BASE_URL?.replace(/\/$/, '');
+    if (cdn) return `${cdn}/${key}`;
+    const bucket = process.env.S3_BUCKET_NAME;
+    const region = process.env.S3_REGION || 'us-east-1';
+    return `https://${bucket}.s3.${region}.amazonaws.com/${encodeURI(key)}`;
+};
+
+const deleteS3KeyIfAny = async (key) => {
+    if (!key) return;
+    try {
+        await s3.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: key }));
+    } catch (e) {
+        console.error('S3 delete failed:', e.message);
+    }
+};
 
 export const createPlanVideo = async (req, res) => {
     try {
@@ -19,21 +43,21 @@ export const createPlanVideo = async (req, res) => {
 
         // Validate required fields
         if (!level_name || !video_title || !video_time || !burn || !planDetailsId) {
-            req.files?.plan_image?.[0]?.path && fs.existsSync(req.files.plan_image[0].path) && fs.unlinkSync(req.files.plan_image[0].path);
-            req.files?.plan_video?.[0]?.path && fs.existsSync(req.files.plan_video[0].path) && fs.unlinkSync(req.files.plan_video[0].path);
+            await deleteS3KeyIfAny(req.files?.plan_image?.[0]?.key);
+            await deleteS3KeyIfAny(req.files?.plan_video?.[0]?.key);
             return ThrowError(res, 400, "All fields are required.");
         }
 
         if (!mongoose.Types.ObjectId.isValid(planDetailsId)) {
-            req.files?.plan_image?.[0]?.path && fs.existsSync(req.files.plan_image[0].path) && fs.unlinkSync(req.files.plan_image[0].path);
-            req.files?.plan_video?.[0]?.path && fs.existsSync(req.files.plan_video[0].path) && fs.unlinkSync(req.files.plan_video[0].path);
+            await deleteS3KeyIfAny(req.files?.plan_image?.[0]?.key);
+            await deleteS3KeyIfAny(req.files?.plan_video?.[0]?.key);
             return ThrowError(res, 400, "Invalid planDetailsId.");
         }
 
         const planDetails = await PlanDetails.findById(planDetailsId);
         if (!planDetails) {
-            req.files?.plan_image?.[0]?.path && fs.existsSync(req.files.plan_image[0].path) && fs.unlinkSync(req.files.plan_image[0].path);
-            req.files?.plan_video?.[0]?.path && fs.existsSync(req.files.plan_video[0].path) && fs.unlinkSync(req.files.plan_video[0].path);
+            await deleteS3KeyIfAny(req.files?.plan_image?.[0]?.key);
+            await deleteS3KeyIfAny(req.files?.plan_video?.[0]?.key);
             return sendNotFoundResponse(res, "planDetailsId not found.");
         }
 
@@ -66,8 +90,8 @@ export const createPlanVideo = async (req, res) => {
             });
         }
 
-        const planImage = planImageFile?.filename || null;
-        const planVideo = planVideoFile?.filename || null;
+        const planImageKey = planImageFile?.key || null;
+        const planVideoKey = planVideoFile?.key || null;
 
         const duplicate = await PlanVideo.findOne({
             video_title,
@@ -75,14 +99,16 @@ export const createPlanVideo = async (req, res) => {
         });
 
         if (duplicate) {
-            planImageFile?.path && fs.existsSync(planImageFile.path) && fs.unlinkSync(planImageFile.path);
-            planVideoFile?.path && fs.existsSync(planVideoFile.path) && fs.unlinkSync(planVideoFile.path);
+            await deleteS3KeyIfAny(planImageKey);
+            await deleteS3KeyIfAny(planVideoKey);
             return ThrowError(res, 400, "A video with the same title already exists in one of the selected planDetailsId");
         }
 
         const newPlanVideo = await PlanVideo.create({
-            plan_image: planImage,
-            plan_video: planVideo,
+            plan_image: planImageKey ? publicUrlForKey(planImageKey) : null,
+            plan_image_key: planImageKey,
+            plan_video: planVideoKey ? publicUrlForKey(planVideoKey) : null,
+            plan_video_key: planVideoKey,
             level_name,
             video_title,
             video_time,
@@ -99,29 +125,11 @@ export const createPlanVideo = async (req, res) => {
         return res.status(201).json({
             status: true,
             message: "PlanVideo created successfully",
-            data: {
-                planVideo: newPlanVideo,
-                fileInfo: {
-                    image: planImageFile
-                        ? {
-                            url: `/public/plan_images/${planImage}`,
-                            type: planImageFile.mimetype,
-                            size: planImageFile.size
-                        }
-                        : null,
-                    video: planVideoFile
-                        ? {
-                            url: `/public/plan_videos/${planVideo}`,
-                            type: planVideoFile.mimetype,
-                            size: planVideoFile.size
-                        }
-                        : null
-                }
-            }
+            data: newPlanVideo
         });
     } catch (error) {
-        req.files?.plan_image?.[0]?.path && fs.existsSync(req.files.plan_image[0].path) && fs.unlinkSync(req.files.plan_image[0].path);
-        req.files?.plan_video?.[0]?.path && fs.existsSync(req.files.plan_video[0].path) && fs.unlinkSync(req.files.plan_video[0].path);
+        await deleteS3KeyIfAny(req.files?.plan_image?.[0]?.key);
+        await deleteS3KeyIfAny(req.files?.plan_video?.[0]?.key);
         return ThrowError(res, 500, error.message);
     }
 };
@@ -138,16 +146,7 @@ export const getPlanVideoByPlanDetailsId = async (req, res) => {
             return sendSuccessResponse(res, "No PlanVideo found for this Plan", []);
         }
 
-        const baseImageUrl = "/public/plan_images/";
-        const baseVideoUrl = "/public/plan_videos/";
-
-        const modifiedResult = planVideo.map(video => ({
-            ...video.toObject(),
-            plan_image: video.plan_image ? baseImageUrl + video.plan_image : null,
-            plan_video: video.plan_video ? baseVideoUrl + video.plan_video : null
-        }));
-
-        return sendSuccessResponse(res, "PlanVideo fetched successfully", modifiedResult);
+        return sendSuccessResponse(res, "PlanVideo fetched successfully", planVideo);
     } catch (error) {
         return ThrowError(res, 500, error.message);
     }
@@ -162,16 +161,7 @@ export const getAllPlanVideo = async (req, res) => {
             return sendNotFoundResponse(res, "No any PlanVideo found!!!")
         }
 
-        const baseImageUrl = "/public/plan_images/";
-        const baseVideoUrl = "/public/plan_videos/";
-
-        const modifiedResult = planVideo.map(video => ({
-            ...video.toObject(),
-            plan_image: video.plan_image ? baseImageUrl + video.plan_image : null,
-            plan_video: video.plan_video ? baseVideoUrl + video.plan_video : null
-        }));
-
-        return sendSuccessResponse(res, "PlanVideo fetched successfully...", modifiedResult)
+        return sendSuccessResponse(res, "PlanVideo fetched successfully...", planVideo)
     } catch (error) {
         return ThrowError(res, 500, error.message)
     }
@@ -189,16 +179,7 @@ export const getPlanVideoById = async (req, res) => {
             return ThrowError(res, 404, "planVideo not found");
         }
 
-        const baseImageUrl = "/public/plan_images/";
-        const baseVideoUrl = "/public/plan_videos/";
-
-        const modifiedResult = {
-            ...planVideo.toObject(),
-            plan_image: planVideo.plan_image ? baseImageUrl + planVideo.plan_image : null,
-            plan_video: planVideo.plan_video ? baseVideoUrl + planVideo.plan_video : null
-        };
-
-        return sendSuccessResponse(res, "PlanVideo fetched successfully...", modifiedResult)
+        return sendSuccessResponse(res, "PlanVideo fetched successfully...", planVideo)
     } catch (error) {
         return ThrowError(res, 500, error.message);
     }
@@ -243,20 +224,16 @@ export const updatePlanVideo = async (req, res) => {
         const imageFile = req.files?.['plan_image']?.[0];
         const videoFile = req.files?.['plan_video']?.[0];
 
-        if (imageFile) {
-            if (planVideo.plan_image) {
-                const oldImagePath = path.join(process.cwd(), "public", "plan_images", planVideo.plan_image);
-                if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
-            }
-            planVideo.plan_image = imageFile.filename;
+        if (imageFile?.key) {
+            await deleteS3KeyIfAny(planVideo.plan_image_key || (() => { try { const u = new URL(planVideo.plan_image); return u.pathname.replace(/^\//,''); } catch { return null; } })());
+            planVideo.plan_image = publicUrlForKey(imageFile.key);
+            planVideo.plan_image_key = imageFile.key;
         }
 
-        if (videoFile) {
-            if (planVideo.plan_video) {
-                const oldVideoPath = path.join(process.cwd(), "public", "plan_videos", planVideo.plan_video);
-                if (fs.existsSync(oldVideoPath)) fs.unlinkSync(oldVideoPath);
-            }
-            planVideo.plan_video = videoFile.filename;
+        if (videoFile?.key) {
+            await deleteS3KeyIfAny(planVideo.plan_video_key || (() => { try { const u = new URL(planVideo.plan_video); return u.pathname.replace(/^\//,''); } catch { return null; } })());
+            planVideo.plan_video = publicUrlForKey(videoFile.key);
+            planVideo.plan_video_key = videoFile.key;
         }
 
         // Update text fields
@@ -288,17 +265,8 @@ export const deletePlanVideo = async (req, res) => {
             return sendErrorResponse(res, 404, "PlanVideo not found");
         }
 
-        // Delete video file
-        if (existingPlanVideo.plan_video) {
-            const videoPath = path.join(process.cwd(), "public", "plan_videos", existingPlanVideo.plan_video);
-            if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
-        }
-
-        // Delete image file
-        if (existingPlanVideo.plan_image) {
-            const imagePath = path.join(process.cwd(), "public", "plan_images", existingPlanVideo.plan_image);
-            if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-        }
+        await deleteS3KeyIfAny(existingPlanVideo.plan_image_key || (() => { try { const u = new URL(existingPlanVideo.plan_image); return u.pathname.replace(/^\//,''); } catch { return null; } })());
+        await deleteS3KeyIfAny(existingPlanVideo.plan_video_key || (() => { try { const u = new URL(existingPlanVideo.plan_video); return u.pathname.replace(/^\//,''); } catch { return null; } })());
 
         // Remove from PlanDetails
         if (existingPlanVideo.planDetailsId) {

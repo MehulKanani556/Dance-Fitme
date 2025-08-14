@@ -6,6 +6,9 @@ const styleSchema = mongoose.Schema({
     },
     style_image: {
         type: String
+    },
+    style_image_key: {
+        type: String
     }
 }, { timestamps: true })
 

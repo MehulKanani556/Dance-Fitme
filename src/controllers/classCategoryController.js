@@ -2,39 +2,84 @@ import mongoose from "mongoose";
 import { ThrowError } from "../utils/ErrorUtils.js";
 import ClassCategory from "../models/classCategoryModel.js";
 import { sendBadRequestResponse, sendCreatedResponse, sendErrorResponse, sendSuccessResponse } from "../utils/ResponseUtils.js";
-import fs from "fs"
-import path from "path";
+import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
+// import ClassCategory, sendBadRequestResponse, sendCreatedResponse, ThrowError from where you already do
 
+// --- S3 client (reuse your env) ---
+const s3 = new S3Client({
+    region: process.env.S3_REGION || 'us-east-1',
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY.trim(),
+        secretAccessKey: process.env.S3_SECRET_KEY.trim(),
+    },
+});
 
-//craete ClassCategory
+// Build a public URL for the stored key
+const publicUrlForKey = (key) => {
+    const cdn = process.env.CDN_BASE_URL?.replace(/\/$/, '');
+    if (cdn) return `${cdn}/${key}`; // CloudFront or custom domain
+    const bucket = process.env.S3_BUCKET_NAME;
+    const region = process.env.S3_REGION || 'us-east-1';
+    return `https://${bucket}.s3.${region}.amazonaws.com/${encodeURI(key)}`; // requires bucket/object to be publicly readable
+};
+
+// Delete uploaded object if we need to roll back after a validation error
+const cleanupUploadedIfAny = async (file) => {
+    if (file?.key) {
+        try {
+            await s3.send(
+                new DeleteObjectCommand({
+                    Bucket: process.env.S3_BUCKET_NAME,
+                    Key: file.key,
+                })
+            );
+        } catch (e) {
+            console.error('S3 cleanup failed:', e.message);
+        }
+    }
+};
+
 export const createClassCategory = async (req, res) => {
+    // Support either single upload or fields-based upload
+    const pickUploaded = () => {
+        if (req.file) return req.file;
+        if (req.files?.classCategory_image?.[0]) return req.files.classCategory_image[0];
+        if (req.files?.image?.[0]) return req.files.image[0]; // fallback if you posted as "image"
+        return null;
+    };
+
+    const uploaded = pickUploaded();
+
     try {
-        const { classCategory_title } = req.body
+        const { classCategory_title } = req.body;
 
         if (!classCategory_title) {
-            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
-            return sendBadRequestResponse(res, "classCategory_title are required");
+            await cleanupUploadedIfAny(uploaded);
+            return sendBadRequestResponse(res, 'classCategory_title are required');
         }
 
         const existingClassCategory = await ClassCategory.findOne({ classCategory_title });
         if (existingClassCategory) {
-            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
-            return sendBadRequestResponse(res, "This classCategory is already assigned to this class");
+            await cleanupUploadedIfAny(uploaded);
+            return sendBadRequestResponse(res, 'This classCategory is already assigned to this class');
         }
 
         let classCategory_image = null;
-        if (req.file) {
-            classCategory_image = `${process.env.BASE_URL}/public/classCategory_images/${path.basename(req.file.path)}`;
+        let classCategory_image_key = null;
+        if (uploaded?.key) {
+            classCategory_image = publicUrlForKey(uploaded.key);
+            classCategory_image_key = uploaded.key;
         }
 
         const newClassCategory = await ClassCategory.create({
             classCategory_title,
-            classCategory_image
+            classCategory_image,
+            classCategory_image_key
         });
 
-        return sendCreatedResponse(res, "ClassCategory added successfully", newClassCategory);
+        return sendCreatedResponse(res, 'ClassCategory added successfully', newClassCategory);
     } catch (error) {
-        if (req.file) fs.unlinkSync(path.resolve(req.file.path));
+        await cleanupUploadedIfAny(uploaded);
         return ThrowError(res, 500, error.message);
     }
 };
@@ -63,7 +108,7 @@ export const getClassCategoryById = async (req, res) => {
             return sendBadRequestResponse(res, "Invalid ClassCategory ID");
         }
 
-        const classCategory = await ClassCategory.finDdById(id)
+        const classCategory = await ClassCategory.findById(id)
         if (!classCategory) {
             return sendErrorResponse(res, 404, "ClassCategory not found");
         }
@@ -80,52 +125,54 @@ export const updateClassCategory = async (req, res) => {
         const { id } = req.params;
         const { classCategory_title } = req.body;
 
-        // ✅ Validate ID
+        const pickUploaded = () => {
+            if (req.file) return req.file;
+            if (req.files?.classCategory_image?.[0]) return req.files.classCategory_image[0];
+            return null;
+        };
+        const uploaded = pickUploaded();
+
+        // Validate ID
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
+            await cleanupUploadedIfAny(uploaded);
             return sendBadRequestResponse(res, "Invalid ClassCategory ID");
         }
 
-        // ✅ Fetch existing document
+        // Fetch existing document
         const existingClassCategory = await ClassCategory.findById(id);
         if (!existingClassCategory) {
-            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
+            await cleanupUploadedIfAny(uploaded);
             return sendErrorResponse(res, 404, "ClassCategory not found");
         }
 
-        // ✅ Handle Image Update
-        if (req.file) {
-            const newImagePath = `${process.env.BASE_URL}/public/classCategory_images/${req.file.filename}`;
-
-            // ✅ Delete old image if it exists and is different
-            if (existingClassCategory.classCategory_image) {
-                const oldImageName = existingClassCategory.classCategory_image.split("/").pop();
-                const oldImagePath = path.join("public", "classCategory_images", oldImageName);
-
-                if (
-                    fs.existsSync(oldImagePath) &&
-                    oldImageName !== req.file.filename
-                ) {
-                    fs.unlinkSync(oldImagePath);
+        // Handle Image Update via S3
+        if (uploaded?.key) {
+            // delete previous object if present
+            const oldKey = existingClassCategory.classCategory_image_key;
+            if (oldKey) {
+                try {
+                    await s3.send(new DeleteObjectCommand({
+                        Bucket: process.env.S3_BUCKET_NAME,
+                        Key: oldKey,
+                    }));
+                } catch (e) {
+                    // log only; do not fail the request
+                    console.error('Failed to delete old S3 object:', e.message);
                 }
             }
 
-            // ✅ Set new image path
-            existingClassCategory.classCategory_image = newImagePath;
+            existingClassCategory.classCategory_image = publicUrlForKey(uploaded.key);
+            existingClassCategory.classCategory_image_key = uploaded.key;
         }
 
-        // ✅ Update title if provided
         if (classCategory_title) {
             existingClassCategory.classCategory_title = classCategory_title;
         }
 
-        // ✅ Save updated document
         await existingClassCategory.save();
 
         return sendSuccessResponse(res, "ClassCategory updated successfully", existingClassCategory);
     } catch (error) {
-        // ✅ Cleanup on error
-        if (req.file) fs.unlinkSync(path.resolve(req.file.path));
         return ThrowError(res, 500, error.message);
     }
 };
@@ -147,13 +194,25 @@ export const deleteClassCategory = async (req, res) => {
             return sendErrorResponse(res, 404, "ClassCategory not found");
         }
 
-        // ✅ Delete image if exists
-        if (classCategory.classCategory_image) {
-            const imageName = classCategory.classCategory_image.split("/").pop();
-            const imagePath = path.join("public", "classCategory_images", imageName);
-
-            if (fs.existsSync(imagePath)) {
-                fs.unlinkSync(imagePath);
+        // ✅ Delete image from S3 if exists
+        const keyFromDoc = classCategory.classCategory_image_key;
+        let keyToDelete = keyFromDoc;
+        if (!keyToDelete && classCategory.classCategory_image) {
+            try {
+                const url = new URL(classCategory.classCategory_image);
+                keyToDelete = url.pathname.replace(/^\//, '');
+            } catch {
+                // ignore URL parse errors
+            }
+        }
+        if (keyToDelete) {
+            try {
+                await s3.send(new DeleteObjectCommand({
+                    Bucket: process.env.S3_BUCKET_NAME,
+                    Key: keyToDelete,
+                }));
+            } catch (e) {
+                console.error('Failed to delete S3 object:', e.message);
             }
         }
 

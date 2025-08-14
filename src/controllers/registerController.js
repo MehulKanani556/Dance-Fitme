@@ -1,8 +1,32 @@
 import Register from "../models/registerModel.js";
 import { ThrowError } from "../utils/ErrorUtils.js"
 import bcrypt from "bcryptjs";
-import fs from 'fs';
-import path from "path";
+import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
+
+const s3 = new S3Client({
+    region: process.env.S3_REGION || 'us-east-1',
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY?.trim(),
+        secretAccessKey: process.env.S3_SECRET_KEY?.trim(),
+    },
+});
+
+const publicUrlForKey = (key) => {
+    const cdn = process.env.CDN_BASE_URL?.replace(/\/$/, '');
+    if (cdn) return `${cdn}/${key}`;
+    const bucket = process.env.S3_BUCKET_NAME;
+    const region = process.env.S3_REGION || 'us-east-1';
+    return `https://${bucket}.s3.${region}.amazonaws.com/${encodeURI(key)}`;
+};
+
+const deleteS3KeyIfAny = async (key) => {
+    if (!key) return;
+    try {
+        await s3.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: key }));
+    } catch (e) {
+        console.error('S3 delete failed:', e.message);
+    }
+};
 import {
     sendSuccessResponse,
     sendErrorResponse,
@@ -93,14 +117,12 @@ export const updateRegister = async (req, res) => {
 
         // Access Control
         if (!req.user.isAdmin && req.user._id.toString() !== id) {
-            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
             return sendForbiddenResponse(res, "Access denied. You can only update your own profile.");
         }
 
         // Find existing user
         const existingUser = await Register.findById(id);
         if (!existingUser) {
-            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
             return sendNotFoundResponse(res, "User not found");
         }
 
@@ -111,24 +133,16 @@ export const updateRegister = async (req, res) => {
         if (gender) existingUser.gender = gender;
 
         // ✅ Update profile image
-        if (req.file) {
-            const newImagePath = `/public/images/${req.file.filename}`;
-
-            // Delete old image if exists
-            if (existingUser.image) {
-                const oldImageName = existingUser.image.split("/").pop();
-                const oldImagePath = path.join("public", "images", oldImageName);
-                if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
-            }
-
-            existingUser.image = newImagePath;
+        if (req.file?.key) {
+            await deleteS3KeyIfAny(existingUser.image_key || (() => { try { const u = new URL(existingUser.image); return u.pathname.replace(/^\//,''); } catch { return null; } })());
+            existingUser.image = publicUrlForKey(req.file.key);
+            existingUser.image_key = req.file.key;
         }
 
         await existingUser.save();
 
         return sendSuccessResponse(res, "User updated successfully", existingUser);
     } catch (error) {
-        if (req.file) fs.unlinkSync(path.resolve(req.file.path));
         return sendErrorResponse(res, 500, error.message);
     }
 };
@@ -150,9 +164,7 @@ export const deleteRegister = async (req, res) => {
 
         // Delete image if exists
         if (user.image) {
-            const imageName = user.image.split("/").pop();
-            const imagePath = path.join("public", "images", imageName);
-            if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+            await deleteS3KeyIfAny(user.image_key || (() => { try { const u = new URL(user.image); return u.pathname.replace(/^\//,''); } catch { return null; } })());
         }
 
         return sendSuccessResponse(res, "User deleted successfully");

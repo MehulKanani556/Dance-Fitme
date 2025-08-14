@@ -1,44 +1,62 @@
 import multer from 'multer';
-import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 import dotenv from 'dotenv';
+import multerS3 from 'multer-s3';
+import { S3Client } from '@aws-sdk/client-s3';
 
 dotenv.config();
 
-// 🗂️ Define storage destination based on field name
+// 🛠 S3 Client Configuration
+const s3 = new S3Client({
+    region: process.env.S3_REGION,
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY.trim(),
+        secretAccessKey: process.env.S3_SECRET_KEY.trim()
+    }
+});
 
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        let uploadPath = 'public/';
+// 🗂 Map field names to S3 folders
+const getS3Folder = (fieldname) => {
+    switch (fieldname) {
+        case 'image':
+            return 'images';
+        case 'classCategory_image':
+            return 'classCategory_images';
+        case 'content_image':
+            return 'content_images';
+        case 'content_video':
+            return 'content_videos';
+        case 'style_image':
+            return 'style_images';
+        case 'planDetails_image':
+            return 'planDetails_images';
+        case 'plan_image':
+            return 'plan_images';
+        case 'plan_video':
+            return 'plan_videos';
+        default:
+            throw new Error(`Invalid field name: ${fieldname}`);
+    }
+};
 
-        if (file.fieldname === 'image') {
-            uploadPath += 'images';
-        } else if (file.fieldname === 'classCategory_image') {
-            uploadPath += 'classCategory_images';
-        } else if (file.fieldname === 'content_image') {
-            uploadPath += 'content_images';
-        } else if (file.fieldname === 'content_video') {
-            uploadPath += 'content_videos';
-        } else if (file.fieldname === 'style_image') {
-            uploadPath += 'style_images';
-        } else if (file.fieldname === 'planDetails_image') {
-            uploadPath += 'planDetails_images';
-        } else if (file.fieldname === 'plan_image') {
-            uploadPath += 'plan_images';
-        } else if (file.fieldname === 'plan_video') {
-            uploadPath += 'plan_videos';
-        } else {
-            return cb(new Error("Invalid field name"), null);
-        }
-
-        fs.mkdirSync(uploadPath, { recursive: true });
-        cb(null, uploadPath);
+// 📦 Multer S3 Storage
+const storage = multerS3({
+    s3: s3,
+    bucket: process.env.S3_BUCKET_NAME,
+    contentType: multerS3.AUTO_CONTENT_TYPE,
+    metadata: (req, file, cb) => {
+        cb(null, { fieldname: file.fieldname });
     },
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        const fileName = `${Date.now()}${ext}`;
-        cb(null, fileName);
+    key: (req, file, cb) => {
+        try {
+            const folder = getS3Folder(file.fieldname);
+            const ext = path.extname(file.originalname);
+            const fileName = `${Date.now()}${ext}`;
+            cb(null, `${folder}/${fileName}`);
+        } catch (err) {
+            cb(err);
+        }
     }
 });
 
@@ -64,76 +82,29 @@ const fileFilter = (req, file, cb) => {
     return cb(new Error(`Invalid field name for file upload: ${file.fieldname}`));
 };
 
-// ✅ Multer instance
+// 📥 Multer instance
 const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
     limits: { fileSize: 1024 * 1024 * 200 } // 200MB
 });
 
-// ✅ Convert JFIF to JPEG for image uploads
+// 🔄 Convert JFIF to JPEG — Note: This will need download/convert/re-upload for S3
 const convertJfifToJpeg = async (req, res, next) => {
-    try {
-        const filesToConvert = [];
-
-        if (req.file) {
-            filesToConvert.push(req.file); // Single upload
-        }
-
-        if (req.files) {
-            for (const key in req.files) {
-                const fileArray = req.files[key];
-                fileArray.forEach(f => filesToConvert.push(f));
-            }
-        }
-
-        const conversionPromises = filesToConvert.map(async (file) => {
-            const ext = path.extname(file.originalname).toLowerCase();
-            const isConvertible = ext === '.jfif' || file.mimetype === 'image/jfif' || file.mimetype === 'application/octet-stream';
-
-            if (!isConvertible) return;
-
-            const inputPath = file.path;
-            const outputPath = inputPath.replace(/\.[^/.]+$/, "") + ".jpeg";
-
-            await sharp(inputPath).jpeg().toFile(outputPath);
-
-            if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-
-            // Update file object to point to new JPEG file
-            file.path = outputPath;
-            file.filename = path.basename(outputPath);
-            file.mimetype = 'image/jpeg';
-        });
-
-        await Promise.all(conversionPromises);
-        next();
-    } catch (err) {
-        console.error('Error in convertJfifToJpeg:', err);
-        next(err);
-    }
-};
-
-
-// ✅ Error handling middleware
-const handleMulterError = (err, req, res, next) => {
-    console.log('Upload error:', err);
-    if (err instanceof multer.MulterError || err) {
-        return res.status(400).json({
-            success: false,
-            message: err.message
-        });
-    }
+    console.log('JFIF conversion placeholder — needs custom S3 handling.');
     next();
 };
 
-// ✅ Exported upload handlers
-const uploadHandlers = {
-    single: (fieldName) => upload.single(fieldName),
-    fields: (fields) => upload.fields(fields),
+// ⚠️ Error handler
+const handleMulterError = (err, req, res, next) => {
+    console.error('Upload error:', err);
+    return res.status(400).json({
+        success: false,
+        message: err.message
+    });
 };
 
-// ✅ Final export
+// 📤 Exported upload handlers
 export const uploadMedia = upload.fields([
     { name: 'image', maxCount: 1 },
     { name: 'content_image', maxCount: 1 },
@@ -142,4 +113,4 @@ export const uploadMedia = upload.fields([
     { name: 'plan_video', maxCount: 1 }
 ]);
 
-export { upload, uploadHandlers, convertJfifToJpeg, handleMulterError };
+export { upload, convertJfifToJpeg, handleMulterError };

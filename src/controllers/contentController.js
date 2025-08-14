@@ -6,8 +6,33 @@ import ClassCategory from "../models/classCategoryModel.js";
 import Payment from "../models/paymentModel.js";
 import PlanDetails from "../models/planDetailsModel.js";
 import Style from "../models/styleModel.js";
-import fs from "fs"
-import path from "path";
+import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
+
+// S3 client
+const s3 = new S3Client({
+    region: process.env.S3_REGION || 'us-east-1',
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY?.trim(),
+        secretAccessKey: process.env.S3_SECRET_KEY?.trim(),
+    },
+});
+
+const publicUrlForKey = (key) => {
+    const cdn = process.env.CDN_BASE_URL?.replace(/\/$/, '');
+    if (cdn) return `${cdn}/${key}`;
+    const bucket = process.env.S3_BUCKET_NAME;
+    const region = process.env.S3_REGION || 'us-east-1';
+    return `https://${bucket}.s3.${region}.amazonaws.com/${encodeURI(key)}`;
+};
+
+const deleteS3KeyIfAny = async (key) => {
+    if (!key) return;
+    try {
+        await s3.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: key }));
+    } catch (e) {
+        console.error('S3 delete failed:', e.message);
+    }
+};
 
 export const createContent = async (req, res) => {
     try {
@@ -23,38 +48,39 @@ export const createContent = async (req, res) => {
 
         // Validate required fields
         if (!level_name || !video_title || !video_time || !video_description || !burn || !classCategoryId || !styleId) {
-            req.files?.content_image?.[0]?.path && fs.existsSync(req.files.content_image[0].path) && fs.unlinkSync(req.files.content_image[0].path);
-            req.files?.content_video?.[0]?.path && fs.existsSync(req.files.content_video[0].path) && fs.unlinkSync(req.files.content_video[0].path);
+            // Cleanup uploaded S3 files if any
+            await deleteS3KeyIfAny(req.files?.content_image?.[0]?.key);
+            await deleteS3KeyIfAny(req.files?.content_video?.[0]?.key);
             return ThrowError(res, 400, "All fields are required.");
         }
 
         const parsedClassCatIds = typeof classCategoryId === "string" ? JSON.parse(classCategoryId) : classCategoryId;
         const classCatIds = Array.isArray(parsedClassCatIds) ? parsedClassCatIds : [parsedClassCatIds];
         if (!classCatIds.every(id => mongoose.Types.ObjectId.isValid(id))) {
-            req.files?.content_image?.[0]?.path && fs.existsSync(req.files.content_image[0].path) && fs.unlinkSync(req.files.content_image[0].path);
-            req.files?.content_video?.[0]?.path && fs.existsSync(req.files.content_video[0].path) && fs.unlinkSync(req.files.content_video[0].path);
+            await deleteS3KeyIfAny(req.files?.content_image?.[0]?.key);
+            await deleteS3KeyIfAny(req.files?.content_video?.[0]?.key);
             return ThrowError(res, 400, "Invalid classCategoryId.");
         }
 
         const validCategories = await ClassCategory.find({ _id: { $in: classCatIds } });
         if (validCategories.length !== classCatIds.length) {
-            req.files?.content_image?.[0]?.path && fs.existsSync(req.files.content_image[0].path) && fs.unlinkSync(req.files.content_image[0].path);
-            req.files?.content_video?.[0]?.path && fs.existsSync(req.files.content_video[0].path) && fs.unlinkSync(req.files.content_video[0].path);
+            await deleteS3KeyIfAny(req.files?.content_image?.[0]?.key);
+            await deleteS3KeyIfAny(req.files?.content_video?.[0]?.key);
             return sendNotFoundResponse(res, "One or more classCategoryId not found.");
         }
 
         const parsedStyleIds = typeof styleId === "string" ? JSON.parse(styleId) : styleId;
         const styleIds = Array.isArray(parsedStyleIds) ? parsedStyleIds : [parsedStyleIds];
         if (!styleIds.every(id => mongoose.Types.ObjectId.isValid(id))) {
-            req.files?.content_image?.[0]?.path && fs.existsSync(req.files.content_image[0].path) && fs.unlinkSync(req.files.content_image[0].path);
-            req.files?.content_video?.[0]?.path && fs.existsSync(req.files.content_video[0].path) && fs.unlinkSync(req.files.content_video[0].path);
+            await deleteS3KeyIfAny(req.files?.content_image?.[0]?.key);
+            await deleteS3KeyIfAny(req.files?.content_video?.[0]?.key);
             return ThrowError(res, 400, "Invalid styleId.");
         }
 
         const validStyles = await Style.find({ _id: { $in: styleIds } });
         if (validStyles.length !== styleIds.length) {
-            req.files?.content_image?.[0]?.path && fs.existsSync(req.files.content_image[0].path) && fs.unlinkSync(req.files.content_image[0].path);
-            req.files?.content_video?.[0]?.path && fs.existsSync(req.files.content_video[0].path) && fs.unlinkSync(req.files.content_video[0].path);
+            await deleteS3KeyIfAny(req.files?.content_image?.[0]?.key);
+            await deleteS3KeyIfAny(req.files?.content_video?.[0]?.key);
             return sendNotFoundResponse(res, "One or more styleId not found.");
         }
 
@@ -68,8 +94,8 @@ export const createContent = async (req, res) => {
             });
         }
 
-        const contentImage = contentImageFile?.filename || null;
-        const contentVideo = contentVideoFile?.filename || null;
+        const contentImageKey = contentImageFile?.key || null;
+        const contentVideoKey = contentVideoFile?.key || null;
 
         const duplicate = await Content.findOne({
             video_title,
@@ -78,14 +104,16 @@ export const createContent = async (req, res) => {
         });
 
         if (duplicate) {
-            contentImageFile?.path && fs.existsSync(contentImageFile.path) && fs.unlinkSync(contentImageFile.path);
-            contentVideoFile?.path && fs.existsSync(contentVideoFile.path) && fs.unlinkSync(contentVideoFile.path);
+            await deleteS3KeyIfAny(contentImageKey);
+            await deleteS3KeyIfAny(contentVideoKey);
             return ThrowError(res, 400, "A video with the same title already exists in one of the selected categories or styles.");
         }
 
         const newContent = await Content.create({
-            content_image: contentImage ? `${process.env.BASE_URL}/public/content_images/${contentImage}` : null,
-            content_video: contentVideo ? `${process.env.BASE_URL}/public/content_videos/${contentVideo}` : null,
+            content_image: contentImageKey ? publicUrlForKey(contentImageKey) : null,
+            content_image_key: contentImageKey,
+            content_video: contentVideoKey ? publicUrlForKey(contentVideoKey) : null,
+            content_video_key: contentVideoKey,
             level_name,
             video_title,
             video_time,
@@ -98,29 +126,11 @@ export const createContent = async (req, res) => {
         return res.status(201).json({
             status: true,
             message: "Content created successfully",
-            data: {
-                content: newContent,
-                fileInfo: {
-                    image: contentImageFile
-                        ? {
-                            url: `${process.env.BASE_URL}/public/content_images/${contentImage}`,
-                            type: contentImageFile.mimetype,
-                            size: contentImageFile.size
-                        }
-                        : null,
-                    video: contentVideoFile
-                        ? {
-                            url: `${process.env.BASE_URL}/public/content_videos/${contentVideo}`,
-                            type: contentVideoFile.mimetype,
-                            size: contentVideoFile.size
-                        }
-                        : null
-                }
-            }
+            data: newContent
         });
     } catch (error) {
-        req.files?.content_image?.[0]?.path && fs.existsSync(req.files.content_image[0].path) && fs.unlinkSync(req.files.content_image[0].path);
-        req.files?.content_video?.[0]?.path && fs.existsSync(req.files.content_video[0].path) && fs.unlinkSync(req.files.content_video[0].path);
+        await deleteS3KeyIfAny(req.files?.content_image?.[0]?.key);
+        await deleteS3KeyIfAny(req.files?.content_video?.[0]?.key);
         return ThrowError(res, 500, error.message);
     }
 };
@@ -250,20 +260,17 @@ export const updateContent = async (req, res) => {
         const imageFile = req.files?.['content_image']?.[0];
         const videoFile = req.files?.['content_video']?.[0];
 
-        if (imageFile) {
-            if (content.content_image) {
-                const oldImagePath = path.resolve(`public/content_images/${content.content_image}`);
-                fs.existsSync(oldImagePath) && fs.unlinkSync(oldImagePath);
-            }
-            content.content_image = imageFile.filename;
+        if (imageFile?.key) {
+            // delete old from S3
+            await deleteS3KeyIfAny(content.content_image_key || (() => { try { const u = new URL(content.content_image); return u.pathname.replace(/^\//,''); } catch { return null; } })());
+            content.content_image = publicUrlForKey(imageFile.key);
+            content.content_image_key = imageFile.key;
         }
 
-        if (videoFile) {
-            if (content.content_video) {
-                const oldVideoPath = path.resolve(`public/content_videos/${content.content_video}`);
-                fs.existsSync(oldVideoPath) && fs.unlinkSync(oldVideoPath);
-            }
-            content.content_video = videoFile.filename;
+        if (videoFile?.key) {
+            await deleteS3KeyIfAny(content.content_video_key || (() => { try { const u = new URL(content.content_video); return u.pathname.replace(/^\//,''); } catch { return null; } })());
+            content.content_video = publicUrlForKey(videoFile.key);
+            content.content_video_key = videoFile.key;
         }
 
         // ✅ Update fields
@@ -298,14 +305,9 @@ export const deleteContent = async (req, res) => {
             return sendErrorResponse(res, 404, "Content not found");
         }
 
-        if (existingContent.content_video) {
-            const videoPath = path.resolve(`public/content_videos/${existingContent.content_video}`);
-            fs.existsSync(videoPath) && fs.unlinkSync(videoPath);
-        }
-        if (existingContent.content_image) {
-            const imagePath = path.resolve(`public/content_images/${existingContent.content_image}`);
-            fs.existsSync(imagePath) && fs.unlinkSync(imagePath);
-        }
+        // delete from S3 if existed
+        await deleteS3KeyIfAny(existingContent.content_image_key || (() => { try { const u = new URL(existingContent.content_image); return u.pathname.replace(/^\//,''); } catch { return null; } })());
+        await deleteS3KeyIfAny(existingContent.content_video_key || (() => { try { const u = new URL(existingContent.content_video); return u.pathname.replace(/^\//,''); } catch { return null; } })());
 
         // Delete the Content from database
         const deletedContent = await Content.findByIdAndDelete(id);

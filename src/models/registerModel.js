@@ -25,6 +25,9 @@ const registerSchema = mongoose.Schema({
     image: {
         type: String
     },
+    image_key: {
+        type: String
+    },
     role: {
         type: String,
         enum: ["admin", "user"]

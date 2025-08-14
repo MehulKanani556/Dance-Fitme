@@ -2,8 +2,32 @@ import mongoose from "mongoose";
 import PlanDetails from "../models/planDetailsModel.js";
 import { ThrowError } from "../utils/ErrorUtils.js";
 import { sendBadRequestResponse, sendNotFoundResponse, sendSuccessResponse } from "../utils/ResponseUtils.js";
-import fs from "fs"
-import path from "path";
+import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
+
+const s3 = new S3Client({
+    region: process.env.S3_REGION || 'us-east-1',
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY?.trim(),
+        secretAccessKey: process.env.S3_SECRET_KEY?.trim(),
+    },
+});
+
+const publicUrlForKey = (key) => {
+    const cdn = process.env.CDN_BASE_URL?.replace(/\/$/, '');
+    if (cdn) return `${cdn}/${key}`;
+    const bucket = process.env.S3_BUCKET_NAME;
+    const region = process.env.S3_REGION || 'us-east-1';
+    return `https://${bucket}.s3.${region}.amazonaws.com/${encodeURI(key)}`;
+};
+
+const deleteS3KeyIfAny = async (key) => {
+    if (!key) return;
+    try {
+        await s3.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET_NAME, Key: key }));
+    } catch (e) {
+        console.error('S3 delete failed:', e.message);
+    }
+};
 
 export const createPlan = async (req, res) => {
     try {
@@ -11,21 +35,23 @@ export const createPlan = async (req, res) => {
 
         // ✅ Required fields validation
         if (!plan_title || !total_workout || !startTime || !endTime || !description) {
-            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
+            await deleteS3KeyIfAny(req.file?.key);
             return sendBadRequestResponse(res, "All fields are required!");
         }
 
         // ✅ Check for duplicate plan title
         const existingPlan = await PlanDetails.findOne({ plan_title: plan_title.trim() });
         if (existingPlan) {
-            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
+            await deleteS3KeyIfAny(req.file?.key);
             return sendBadRequestResponse(res, "This plan already exists.");
         }
 
         // ✅ Handle image path
         let planDetails_image = null;
-        if (req.file) {
-            planDetails_image = `/public/planDetails_images/${req.file.filename}`;
+        let planDetails_image_key = null;
+        if (req.file?.key) {
+            planDetails_image = publicUrlForKey(req.file.key);
+            planDetails_image_key = req.file.key;
         }
 
         // ✅ Create new plan
@@ -35,7 +61,8 @@ export const createPlan = async (req, res) => {
             startTime,
             endTime,
             description,
-            planDetails_image
+            planDetails_image,
+            planDetails_image_key
         });
 
         await newPlan.save();
@@ -43,10 +70,7 @@ export const createPlan = async (req, res) => {
         return sendSuccessResponse(res, "PlanDetails added successfully", newPlan);
 
     } catch (error) {
-        // ✅ Cleanup uploaded image if error occurs
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(path.resolve(req.file.path));
-        }
+        await deleteS3KeyIfAny(req.file?.key);
         return ThrowError(res, 500, error.message);
     }
 };
@@ -93,34 +117,20 @@ export const updatePlanDetails = async (req, res) => {
         const { plan_title, total_workout, startTime, endTime, description } = req.body;
 
         if (!mongoose.Types.ObjectId.isValid(id)) {
-            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
+            await deleteS3KeyIfAny(req.file?.key);
             return sendBadRequestResponse(res, "Invalid PlanDetails ID");
         }
 
         const existingPlanDetails = await PlanDetails.findById(id);
         if (!existingPlanDetails) {
-            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
+            await deleteS3KeyIfAny(req.file?.key);
             return sendNotFoundResponse(res, 404, "PlanDetails not found");
         }
 
-        if (req.file) {
-            const newImagePath = `/public/planDetails_images/${req.file.filename}`;
-
-            // ✅ Delete old image if it exists and is different
-            if (existingPlanDetails.planDetails_image) {
-                const oldImageName = existingPlanDetails.planDetails_image.split("/").pop();
-                const oldImagePath = path.join("public", "planDetails_images", oldImageName);
-
-                if (
-                    fs.existsSync(oldImagePath) &&
-                    oldImageName !== req.file.filename
-                ) {
-                    fs.unlinkSync(oldImagePath);
-                }
-            }
-
-            // ✅ Set new image path
-            existingPlanDetails.planDetails_image = newImagePath;
+        if (req.file?.key) {
+            await deleteS3KeyIfAny(existingPlanDetails.planDetails_image_key || (() => { try { const u = new URL(existingPlanDetails.planDetails_image); return u.pathname.replace(/^\//,''); } catch { return null; } })());
+            existingPlanDetails.planDetails_image = publicUrlForKey(req.file.key);
+            existingPlanDetails.planDetails_image_key = req.file.key;
         }
 
 
@@ -134,7 +144,6 @@ export const updatePlanDetails = async (req, res) => {
 
         return sendSuccessResponse(res, "PlanDetails updated successfully", existingPlanDetails);
     } catch (error) {
-        if (req.file) fs.unlinkSync(path.resolve(req.file.path));
         return ThrowError(res, 500, error.message);
     }
 };
@@ -154,10 +163,7 @@ export const deletePlanDetails = async (req, res) => {
         }
 
         if (planDetails.planDetails_image) {
-            const imagePath = path.join(process.cwd(), planDetails.planDetails_image);
-            if (fs.existsSync(imagePath)) {
-                fs.unlinkSync(imagePath);
-            }
+            await deleteS3KeyIfAny(planDetails.planDetails_image_key || (() => { try { const u = new URL(planDetails.planDetails_image); return u.pathname.replace(/^\//,''); } catch { return null; } })());
         }
 
         return sendSuccessResponse(res, "PlanDetails deleted successfully");

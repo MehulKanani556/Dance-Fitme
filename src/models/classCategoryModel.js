@@ -6,6 +6,9 @@ const classCategorySchema = mongoose.Schema({
     },
     classCategory_image: {
         type: String
+    },
+    classCategory_image_key: {
+        type: String
     }
 }, { timestamps: true })
 
