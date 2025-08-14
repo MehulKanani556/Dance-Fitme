@@ -24,7 +24,7 @@ export const createClassCategory = async (req, res) => {
 
         let classCategory_image = null;
         if (req.file) {
-            classCategory_image = `/public/classCategory_image/${path.basename(req.file.path)}`;
+            classCategory_image = `${process.env.BASE_URL}/public/classCategory_images/${path.basename(req.file.path)}`;
         }
 
         const newClassCategory = await ClassCategory.create({
