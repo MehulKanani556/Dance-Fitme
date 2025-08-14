@@ -6,25 +6,25 @@ import fs from "fs"
 import path from "path";
 
 
-//craete Style
+// Create Style
 export const createStyle = async (req, res) => {
     try {
-        const { style_title } = req.body
+        const { style_title } = req.body;
 
         if (!style_title) {
             if (req.file) fs.unlinkSync(path.resolve(req.file.path));
-            return sendBadRequestResponse(res, "style_title are required");
+            return sendBadRequestResponse(res, "style_title is required");
         }
 
         const existingStyle = await Style.findOne({ style_title });
         if (existingStyle) {
             if (req.file) fs.unlinkSync(path.resolve(req.file.path));
-            return sendBadRequestResponse(res, "This style is already assigned to this Style");
+            return sendBadRequestResponse(res, "This style already exists");
         }
 
         let style_image = null;
         if (req.file) {
-            style_image = `/public/style_image/${path.basename(req.file.path)}`;
+            style_image = `/public/style_images/${path.basename(req.file.path)}`; // ✅ same everywhere
         }
 
         const newStyle = await Style.create({
@@ -38,7 +38,6 @@ export const createStyle = async (req, res) => {
         return ThrowError(res, 500, error.message);
     }
 };
-
 // Get all Style
 export const getAllStyle = async (req, res) => {
     try {
@@ -74,7 +73,7 @@ export const getstyleById = async (req, res) => {
     }
 };
 
-// Update Style (Admin only)
+// Update Style
 export const updateStyle = async (req, res) => {
     try {
         const { id } = req.params;
@@ -94,23 +93,18 @@ export const updateStyle = async (req, res) => {
         if (req.file) {
             const newImagePath = `/public/style_images/${req.file.filename}`;
 
-            // ✅ Delete old image if it exists and is different
+            // Delete old image if different
             if (existingStyle.style_image) {
                 const oldImageName = existingStyle.style_image.split("/").pop();
                 const oldImagePath = path.join("public", "style_images", oldImageName);
 
-                if (
-                    fs.existsSync(oldImagePath) &&
-                    oldImageName !== req.file.filename
-                ) {
+                if (fs.existsSync(oldImagePath) && oldImageName !== req.file.filename) {
                     fs.unlinkSync(oldImagePath);
                 }
             }
 
-            // ✅ Set new image path
             existingStyle.style_image = newImagePath;
         }
-
 
         if (style_title) existingStyle.style_title = style_title;
 
@@ -123,7 +117,7 @@ export const updateStyle = async (req, res) => {
     }
 };
 
-// Delete Style (Admin only)
+// Delete Style
 export const deleteStyle = async (req, res) => {
     try {
         const { id } = req.params;

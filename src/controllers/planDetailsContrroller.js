@@ -7,26 +7,30 @@ import path from "path";
 
 export const createPlan = async (req, res) => {
     try {
-        const { plan_title, total_workout, startTime, endTime, description } = req.body
+        const { plan_title, total_workout, startTime, endTime, description } = req.body;
 
+        // ✅ Required fields validation
         if (!plan_title || !total_workout || !startTime || !endTime || !description) {
             if (req.file) fs.unlinkSync(path.resolve(req.file.path));
-            return sendBadRequestResponse(res, "All field are required!!!")
+            return sendBadRequestResponse(res, "All fields are required!");
         }
 
-        const existingPlan = await PlanDetails.findOne({ plan_title })
+        // ✅ Check for duplicate plan title
+        const existingPlan = await PlanDetails.findOne({ plan_title: plan_title.trim() });
         if (existingPlan) {
             if (req.file) fs.unlinkSync(path.resolve(req.file.path));
-            return sendBadRequestResponse(res, "This plan already exists...")
+            return sendBadRequestResponse(res, "This plan already exists.");
         }
 
+        // ✅ Handle image path
         let planDetails_image = null;
         if (req.file) {
-            planDetails_image = `/public/planDetails_images/${path.basename(req.file.path)}`;
+            planDetails_image = `/public/planDetails_images/${req.file.filename}`;
         }
 
-        const newPlan = await PlanDetails.create({
-            plan_title,
+        // ✅ Create new plan
+        const newPlan = new PlanDetails({
+            plan_title: plan_title.trim(),
             total_workout,
             startTime,
             endTime,
@@ -34,12 +38,18 @@ export const createPlan = async (req, res) => {
             planDetails_image
         });
 
+        await newPlan.save();
+
         return sendSuccessResponse(res, "PlanDetails added successfully", newPlan);
 
     } catch (error) {
-        return ThrowError(res, 500, error.message)
+        // ✅ Cleanup uploaded image if error occurs
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(path.resolve(req.file.path));
+        }
+        return ThrowError(res, 500, error.message);
     }
-}
+};
 
 // Get all PlanDetails
 export const getAllPlanDetails = async (req, res) => {

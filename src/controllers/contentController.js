@@ -84,8 +84,8 @@ export const createContent = async (req, res) => {
         }
 
         const newContent = await Content.create({
-            content_image: contentImage,
-            content_video: contentVideo,
+            content_image: contentImage ? `${process.env.BASE_URL}/public/content_images/${contentImage}` : null,
+            content_video: contentVideo ? `${process.env.BASE_URL}/public/content_videos/${contentVideo}` : null,
             level_name,
             video_title,
             video_time,
@@ -103,14 +103,14 @@ export const createContent = async (req, res) => {
                 fileInfo: {
                     image: contentImageFile
                         ? {
-                            url: `/public/content_images/${contentImage}`,
+                            url: `${process.env.BASE_URL}/public/content_images/${contentImage}`,
                             type: contentImageFile.mimetype,
                             size: contentImageFile.size
                         }
                         : null,
                     video: contentVideoFile
                         ? {
-                            url: `/public/content_videos/${contentVideo}`,
+                            url: `${process.env.BASE_URL}/public/content_videos/${contentVideo}`,
                             type: contentVideoFile.mimetype,
                             size: contentVideoFile.size
                         }
@@ -124,7 +124,6 @@ export const createContent = async (req, res) => {
         return ThrowError(res, 500, error.message);
     }
 };
-
 // Get all content for a particular Category
 export const getContentByClassCategoryId = async (req, res) => {
     try {

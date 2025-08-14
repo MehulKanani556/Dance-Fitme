@@ -95,7 +95,7 @@ export const updateClassCategory = async (req, res) => {
 
         // ✅ Handle Image Update
         if (req.file) {
-            const newImagePath = `/public/classCategory_images/${req.file.filename}`;
+            const newImagePath = `${process.env.BASE_URL}/public/classCategory_images/${req.file.filename}`;
 
             // ✅ Delete old image if it exists and is different
             if (existingClassCategory.classCategory_image) {
@@ -130,22 +130,28 @@ export const updateClassCategory = async (req, res) => {
     }
 };
 
+
 // Delete ClassCategory (Admin only)
 export const deleteClassCategory = async (req, res) => {
     try {
         const { id } = req.params;
 
+        // ✅ Validate ID
         if (!mongoose.Types.ObjectId.isValid(id)) {
             return sendBadRequestResponse(res, "Invalid ClassCategory ID");
         }
 
+        // ✅ Find and delete category
         const classCategory = await ClassCategory.findByIdAndDelete(id);
         if (!classCategory) {
             return sendErrorResponse(res, 404, "ClassCategory not found");
         }
 
+        // ✅ Delete image if exists
         if (classCategory.classCategory_image) {
-            const imagePath = path.join(process.cwd(), classCategory.classCategory_image);
+            const imageName = classCategory.classCategory_image.split("/").pop();
+            const imagePath = path.join("public", "classCategory_images", imageName);
+
             if (fs.existsSync(imagePath)) {
                 fs.unlinkSync(imagePath);
             }

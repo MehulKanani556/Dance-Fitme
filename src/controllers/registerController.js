@@ -90,43 +90,37 @@ export const updateRegister = async (req, res) => {
     try {
         const { id } = req.params;
         const { name, phone, email, gender } = req.body;
-        const newImagePath = req.file?.path;
 
+        // Access Control
         if (!req.user.isAdmin && req.user._id.toString() !== id) {
+            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
             return sendForbiddenResponse(res, "Access denied. You can only update your own profile.");
         }
 
+        // Find existing user
         const existingUser = await Register.findById(id);
         if (!existingUser) {
-            if (req.file) {
-                const filePath = path.resolve(req.file.path);
-                if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
-                }
-            }
+            if (req.file) fs.unlinkSync(path.resolve(req.file.path));
             return sendNotFoundResponse(res, "User not found");
         }
 
-        if (name) {
-            existingUser.name = name;
-        }
-        if (phone) {
-            existingUser.phone = phone;
-        }
-        if (gender) {
-            existingUser.gender = gender;
-        }
-        if (email) {
-            existingUser.email = email;
-        }
+        // Update basic fields
+        if (name) existingUser.name = name;
+        if (phone) existingUser.phone = phone;
+        if (email) existingUser.email = email;
+        if (gender) existingUser.gender = gender;
 
-        if (newImagePath) {
+        // ✅ Update profile image
+        if (req.file) {
+            const newImagePath = `/public/images/${req.file.filename}`;
+
+            // Delete old image if exists
             if (existingUser.image) {
-                const oldImagePath = path.resolve(existingUser.image);
-                if (fs.existsSync(oldImagePath)) {
-                    fs.unlinkSync(oldImagePath);
-                }
+                const oldImageName = existingUser.image.split("/").pop();
+                const oldImagePath = path.join("public", "images", oldImageName);
+                if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
             }
+
             existingUser.image = newImagePath;
         }
 
@@ -134,38 +128,36 @@ export const updateRegister = async (req, res) => {
 
         return sendSuccessResponse(res, "User updated successfully", existingUser);
     } catch (error) {
-        if (req.file) {
-            const filePath = path.resolve(req.file.path);
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
-        }
+        if (req.file) fs.unlinkSync(path.resolve(req.file.path));
         return sendErrorResponse(res, 500, error.message);
     }
 };
 
-// Delete user
+// ✅ Delete User Profile
 export const deleteRegister = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const existingUser = await Register.findById(id);
-        if (!existingUser) {
+        // Access Control
+        if (!req.user.isAdmin && req.user._id.toString() !== id) {
+            return sendForbiddenResponse(res, "Access denied. You can only delete your own profile.");
+        }
+
+        const user = await Register.findByIdAndDelete(id);
+        if (!user) {
             return sendNotFoundResponse(res, "User not found");
         }
 
-        if (existingUser.image) {
-            const imagePath = path.resolve(existingUser.image);
-            if (fs.existsSync(imagePath)) {
-                fs.unlinkSync(imagePath);
-            }
+        // Delete image if exists
+        if (user.image) {
+            const imageName = user.image.split("/").pop();
+            const imagePath = path.join("public", "images", imageName);
+            if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
         }
-
-        await Register.findByIdAndDelete(id);
 
         return sendSuccessResponse(res, "User deleted successfully");
     } catch (error) {
-        return ThrowError(res, 500, error.message);
+        return sendErrorResponse(res, 500, error.message);
     }
 };
 

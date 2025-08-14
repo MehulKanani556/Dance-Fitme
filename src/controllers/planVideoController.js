@@ -225,7 +225,8 @@ export const updatePlanVideo = async (req, res) => {
         if (!planVideo) {
             return ThrowError(res, 404, "PlanVideo not found");
         }
-        // ✅ Validate planDetailsId (single ObjectId)
+
+        // Validate planDetailsId
         if (planDetailsId) {
             if (!mongoose.Types.ObjectId.isValid(planDetailsId)) {
                 return ThrowError(res, 400, "Invalid planDetailsId");
@@ -235,37 +236,35 @@ export const updatePlanVideo = async (req, res) => {
             if (!planDetailsExists) {
                 return sendNotFoundResponse(res, "planDetailsId not found");
             }
-
             planVideo.planDetailsId = planDetailsId;
         }
 
-        // ✅ File updates
+        // File updates
         const imageFile = req.files?.['plan_image']?.[0];
         const videoFile = req.files?.['plan_video']?.[0];
 
         if (imageFile) {
             if (planVideo.plan_image) {
-                const oldImagePath = path.resolve(`public/plan_images/${planVideo.plan_image}`);
-                fs.existsSync(oldImagePath) && fs.unlinkSync(oldImagePath);
+                const oldImagePath = path.join(process.cwd(), "public", "plan_images", planVideo.plan_image);
+                if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
             }
             planVideo.plan_image = imageFile.filename;
         }
 
         if (videoFile) {
             if (planVideo.plan_video) {
-                const oldVideoPath = path.resolve(`public/plan_videos/${planVideo.plan_video}`);
-                fs.existsSync(oldVideoPath) && fs.unlinkSync(oldVideoPath);
+                const oldVideoPath = path.join(process.cwd(), "public", "plan_videos", planVideo.plan_video);
+                if (fs.existsSync(oldVideoPath)) fs.unlinkSync(oldVideoPath);
             }
             planVideo.plan_video = videoFile.filename;
         }
 
-        // ✅ Update fields
+        // Update text fields
         planVideo.level_name = level_name ?? planVideo.level_name;
         planVideo.video_title = video_title ?? planVideo.video_title;
         planVideo.video_time = video_time ?? planVideo.video_time;
         planVideo.video_description = video_description ?? planVideo.video_description;
         planVideo.burn = burn ?? planVideo.burn;
-        planDetailsId: planDetailsId ?? planVideo.planDetailsId
 
         const updated = await planVideo.save();
         return sendSuccessResponse(res, "planVideo updated successfully", updated);
@@ -284,22 +283,24 @@ export const deletePlanVideo = async (req, res) => {
             return ThrowError(res, 400, "Invalid PlanVideo ID");
         }
 
-        // Find the PlanVideo first to get the file URLs
         const existingPlanVideo = await PlanVideo.findById(id);
         if (!existingPlanVideo) {
             return sendErrorResponse(res, 404, "PlanVideo not found");
         }
 
+        // Delete video file
         if (existingPlanVideo.plan_video) {
-            const videoPath = path.resolve(`public/plan_videos/${existingPlanVideo.plan_video}`);
-            fs.existsSync(videoPath) && fs.unlinkSync(videoPath);
-
+            const videoPath = path.join(process.cwd(), "public", "plan_videos", existingPlanVideo.plan_video);
+            if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
         }
+
+        // Delete image file
         if (existingPlanVideo.plan_image) {
-            const imagePath = path.resolve(`public/plan_images/${existingPlanVideo.plan_image}`);
-            fs.existsSync(imagePath) && fs.unlinkSync(imagePath);
+            const imagePath = path.join(process.cwd(), "public", "plan_images", existingPlanVideo.plan_image);
+            if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
         }
 
+        // Remove from PlanDetails
         if (existingPlanVideo.planDetailsId) {
             await PlanDetails.findByIdAndUpdate(
                 existingPlanVideo.planDetailsId,
@@ -307,7 +308,7 @@ export const deletePlanVideo = async (req, res) => {
             );
         }
 
-        // Delete the PlanVideo from database
+        // Delete DB record
         const deletedPlanVideo = await PlanVideo.findByIdAndDelete(id);
 
         return sendSuccessResponse(res, "PlanVideo and associated files deleted successfully", deletedPlanVideo);
