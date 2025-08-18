@@ -262,13 +262,13 @@ export const updateContent = async (req, res) => {
 
         if (imageFile?.key) {
             // delete old from S3
-            await deleteS3KeyIfAny(content.content_image_key || (() => { try { const u = new URL(content.content_image); return u.pathname.replace(/^\//,''); } catch { return null; } })());
+            await deleteS3KeyIfAny(content.content_image_key || (() => { try { const u = new URL(content.content_image); return u.pathname.replace(/^\//, ''); } catch { return null; } })());
             content.content_image = publicUrlForKey(imageFile.key);
             content.content_image_key = imageFile.key;
         }
 
         if (videoFile?.key) {
-            await deleteS3KeyIfAny(content.content_video_key || (() => { try { const u = new URL(content.content_video); return u.pathname.replace(/^\//,''); } catch { return null; } })());
+            await deleteS3KeyIfAny(content.content_video_key || (() => { try { const u = new URL(content.content_video); return u.pathname.replace(/^\//, ''); } catch { return null; } })());
             content.content_video = publicUrlForKey(videoFile.key);
             content.content_video_key = videoFile.key;
         }
@@ -306,8 +306,8 @@ export const deleteContent = async (req, res) => {
         }
 
         // delete from S3 if existed
-        await deleteS3KeyIfAny(existingContent.content_image_key || (() => { try { const u = new URL(existingContent.content_image); return u.pathname.replace(/^\//,''); } catch { return null; } })());
-        await deleteS3KeyIfAny(existingContent.content_video_key || (() => { try { const u = new URL(existingContent.content_video); return u.pathname.replace(/^\//,''); } catch { return null; } })());
+        await deleteS3KeyIfAny(existingContent.content_image_key || (() => { try { const u = new URL(existingContent.content_image); return u.pathname.replace(/^\//, ''); } catch { return null; } })());
+        await deleteS3KeyIfAny(existingContent.content_video_key || (() => { try { const u = new URL(existingContent.content_video); return u.pathname.replace(/^\//, ''); } catch { return null; } })());
 
         // Delete the Content from database
         const deletedContent = await Content.findByIdAndDelete(id);
@@ -420,26 +420,28 @@ export const getContentByDanceFitness = async (req, res) => {
 // Get HipHop Content
 export const getContentByHipHop = async (req, res) => {
     try {
-        const style = await Style.findOne({ style_title: "HipHop" });
+        const style = await Style.findOne({
+            style_title: { $regex: /hip\s*hop/i }
+        });
 
         if (!style) {
-            return sendNotFoundResponse(res, "HipHop style not found.");
+            return sendNotFoundResponse(res, "Hip Hop style not found.");
         }
 
-        const content = await Content.find({ styleId: style._id })
+        // styleId array ma search karo
+        const content = await Content.find({ styleId: { $in: [style._id] } })
             .sort({ createdAt: -1 })
-            .populate('classCategoryId')
-            .populate('styleId');
+            .populate("classCategoryId")
+            .populate("styleId");
 
         if (!content || content.length === 0) {
-            return sendNotFoundResponse(res, "No HipHop Content found.");
+            return sendNotFoundResponse(res, "No Hip Hop Content found.");
         }
 
-        return sendSuccessResponse(res, "HipHop Content fetched successfully", content);
+        return sendSuccessResponse(res, "Hip Hop Content fetched successfully", content);
     } catch (error) {
         return ThrowError(res, 500, error.message);
     }
-
 };
 
 // Get Boxing Content
