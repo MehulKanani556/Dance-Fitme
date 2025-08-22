@@ -7,6 +7,8 @@ import Payment from "../models/paymentModel.js";
 import PlanDetails from "../models/planDetailsModel.js";
 import Style from "../models/styleModel.js";
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import classCategoryModel from "../models/classCategoryModel.js";
+import contentModel from "../models/contentModel.js";
 
 // S3 client
 const s3 = new S3Client({
@@ -41,13 +43,14 @@ export const createContent = async (req, res) => {
             video_title,
             video_time,
             video_description,
+            video_range,
             burn,
             classCategoryId,
             styleId
         } = req.body;
 
         // Validate required fields
-        if (!level_name || !video_title || !video_time || !video_description || !burn || !classCategoryId || !styleId) {
+        if (!level_name || !video_title || !video_time || !video_description || !burn || !classCategoryId || !styleId || !video_range) {
             // Cleanup uploaded S3 files if any
             await deleteS3KeyIfAny(req.files?.content_image?.[0]?.key);
             await deleteS3KeyIfAny(req.files?.content_video?.[0]?.key);
@@ -118,6 +121,7 @@ export const createContent = async (req, res) => {
             video_title,
             video_time,
             video_description,
+            video_range,
             burn,
             classCategoryId: classCatIds,
             styleId: styleIds
@@ -134,37 +138,101 @@ export const createContent = async (req, res) => {
         return ThrowError(res, 500, error.message);
     }
 };
+
 // Get all content for a particular Category
 export const getContentByClassCategoryId = async (req, res) => {
     try {
         const { classCategoryId } = req.params;
+
         if (!mongoose.Types.ObjectId.isValid(classCategoryId)) {
             return ThrowError(res, 400, "Invalid classCategory ID");
         }
-        const content = await Content.find({ classCategoryId }).populate('classCategoryId').populate('styleId')
+
+        const classCategory = await classCategoryModel
+            .findById(classCategoryId)
+            .select("classCategory_title");
+
+        if (!classCategory) {
+            return sendSuccessResponse(res, "Class Category not found", []);
+        }
+
+
+        const data = ["0-10", "11-15", "16"];
+
+        let content;
+
+        if (data.includes(classCategory.classCategory_title)) {
+            content = await contentModel
+                .find({
+                    video_range: {
+                        $regex: new RegExp("^" + classCategory.classCategory_title + "$", "i") // case-insensitive
+                    }
+                })
+                .populate("classCategoryId")
+                .populate("styleId");
+        } else {
+            content = await contentModel
+                .find({ classCategoryId })
+                .populate("classCategoryId")
+                .populate("styleId");
+        }
+
         if (!content.length) {
             return sendSuccessResponse(res, "No content found for this Category", []);
         }
 
         return sendSuccessResponse(res, "Content fetched successfully", content);
+
     } catch (error) {
         return ThrowError(res, 500, error.message);
     }
 };
 
+
 // Get all content for a particular Style
 export const getContentByStyleId = async (req, res) => {
     try {
         const { styleId } = req.params;
+
         if (!mongoose.Types.ObjectId.isValid(styleId)) {
-            return ThrowError(res, 400, "Invalid classCategory ID");
+            return ThrowError(res, 400, "Invalid style ID");
         }
-        const content = await Content.find({ styleId }).populate('classCategoryId').populate('styleId');
+
+        const style = await Style
+            .findById(styleId)
+            .select("style_title");
+
+        if (!style) {
+            return sendSuccessResponse(res, "Style not found", []);
+        }
+
+
+        const data = ["0-10", "11-15", "16"];
+
+        let content;
+
+        if (data.includes(style.style_title)) {
+            content = await contentModel
+                .find({
+                    video_range: {
+                        $regex: new RegExp("^" + style.style_title + "$", "i")
+                    }
+                })
+                .populate("classCategoryId")
+                .populate("styleId");
+        } else {
+            content = await contentModel
+                .find({ styleId })
+                .populate("classCategoryId")
+                .populate("styleId");
+        }
+
         if (!content.length) {
-            return sendSuccessResponse(res, "No content found for this Style", []);
+            return sendSuccessResponse(res, "No content found for this Category", []);
         }
 
         return sendSuccessResponse(res, "Content fetched successfully", content);
+
     } catch (error) {
         return ThrowError(res, 500, error.message);
     }
@@ -195,7 +263,7 @@ export const getContentById = async (req, res) => {
         if (!content) {
             return ThrowError(res, 404, "Content not found");
         }
-        res.status(200).json(content);
+        return sendSuccessResponse(res, "Content fetched successfully...", content)
     } catch (error) {
         return ThrowError(res, 500, error.message);
     }
@@ -214,6 +282,7 @@ export const updateContent = async (req, res) => {
             video_title,
             video_time,
             video_description,
+            video_range,
             burn,
             classCategoryId,
             styleId
@@ -260,6 +329,7 @@ export const updateContent = async (req, res) => {
         const imageFile = req.files?.['content_image']?.[0];
         const videoFile = req.files?.['content_video']?.[0];
 
+
         if (imageFile?.key) {
             // delete old from S3
             await deleteS3KeyIfAny(content.content_image_key || (() => { try { const u = new URL(content.content_image); return u.pathname.replace(/^\//, ''); } catch { return null; } })());
@@ -278,6 +348,7 @@ export const updateContent = async (req, res) => {
         content.video_title = video_title ?? content.video_title;
         content.video_time = video_time ?? content.video_time;
         content.video_description = video_description ?? content.video_description;
+        content.video_range = video_range ?? content.video_range;
         content.burn = burn ?? content.burn;
         content.classCategoryId = classCatIds;
         content.styleId = styleIds;
@@ -463,6 +534,31 @@ export const getContentByBoxing = async (req, res) => {
         }
 
         return sendSuccessResponse(res, "Boxing Content fetched successfully", content);
+    } catch (error) {
+        return ThrowError(res, 500, error.message);
+    }
+
+};
+
+// Get Belly Dance Content
+export const getContentByBellyDance = async (req, res) => {
+    try {
+        const style = await Style.findOne({ style_title: "Belly Dance" });
+
+        if (!style) {
+            return sendNotFoundResponse(res, "Belly Dance style not found.");
+        }
+
+        const content = await Content.find({ styleId: style._id })
+            .sort({ createdAt: -1 })
+            .populate('classCategoryId')
+            .populate('styleId');
+
+        if (!content || content.length === 0) {
+            return sendNotFoundResponse(res, "No Belly Dance Content found.");
+        }
+
+        return sendSuccessResponse(res, "Belly Dance Content fetched successfully", content);
     } catch (error) {
         return ThrowError(res, 500, error.message);
     }

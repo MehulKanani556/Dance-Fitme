@@ -5,7 +5,7 @@ import { createRegister, getRegisterById, updateRegister, deleteRegister, getAll
 import { changePassword, forgotPassword, loginUser, resetPassword, VerifyEmail } from '../controllers/loginController.js';
 import { createPremiumPlan, getAllPremiumPlans, getPremiumPlanById, updatePremiumPlan, deletePremiumPlan } from '../controllers/premiumController.js';
 import { createClassCategory, deleteClassCategory, getAllClassCategory, getClassCategoryById, updateClassCategory } from '../controllers/classCategoryController.js';
-import { createContent, deleteContent, getAdvanced, getAllContent, getBeginner, getBestDanceClass, getContentByBoxing, getContentByClassCategoryId, getContentByDanceFitness, getContentByHipHop, getContentById, getContentByStyleId, getIntermediate, getJustReleasedContent, getNewArrivals, getTrendingPlans, incrementContentViews, updateContent } from '../controllers/contentController.js';
+import { createContent, deleteContent, getAdvanced, getAllContent, getBeginner, getBestDanceClass, getContentByBellyDance, getContentByBoxing, getContentByClassCategoryId, getContentByDanceFitness, getContentByHipHop, getContentById, getContentByStyleId, getIntermediate, getJustReleasedContent, getNewArrivals, getTrendingPlans, incrementContentViews, updateContent } from '../controllers/contentController.js';
 import { createStyle, deleteStyle, getAllStyle, getstyleById, updateStyle } from '../controllers/styleController.js';
 import { addRecord, createWeight, deleteWeight, getAllWeight, getWeightByUser, updateWeight } from '../controllers/weightController.js';
 import { createDailyGoal, deleteDailyGoal, getAllDailyGoals, getDailyGoalByUser, updateDailyGoal } from '../controllers/dailyGoalController.js';
@@ -85,7 +85,8 @@ indexRouter.get('/getAdvanced', UserAuth, getAdvanced);
 indexRouter.get('/getIntermediate', UserAuth, getIntermediate);
 indexRouter.get('/getContentByDanceFitness', UserAuth, getContentByDanceFitness);
 indexRouter.get('/getContentByHipHop', UserAuth, getContentByHipHop);
-indexRouter.get('/getContentByBoxing', UserAuth, getContentByBoxing);
+indexRouter.get('/getContentByBoxing', UserAuth, getContentByBoxing); 
+indexRouter.get('/getContentByBellyDance', UserAuth, getContentByBellyDance); 
 indexRouter.get('/getJustReleasedContent', UserAuth, getJustReleasedContent);
 indexRouter.get('/getBestDanceClass', UserAuth, getBestDanceClass);
 indexRouter.get('/getTrendingPlans', UserAuth, getTrendingPlans);

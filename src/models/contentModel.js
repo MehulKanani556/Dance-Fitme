@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { type } from "os";
 
 export const contentSchema = mongoose.Schema({
     content_video: {
@@ -19,6 +20,9 @@ export const contentSchema = mongoose.Schema({
     },
     video_title: {
         type: String
+    },
+    video_range:{
+        type:String
     },
     video_time: {
         type: String
