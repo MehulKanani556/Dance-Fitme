@@ -137,6 +137,8 @@ export const addRecord = async (req, res) => {
             return sendBadRequestResponse(res, "You are not authorized to update this weight...");
         }
 
+        
+
         const givenDate = new Date(date);
         const day = givenDate.getDate();
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
