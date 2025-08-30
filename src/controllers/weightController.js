@@ -121,10 +121,10 @@ export const deleteWeight = async (req, res) => {
 
 export const addRecord = async (req, res) => {
     try {
-        const { value, unit } = req.body;
+        const { value, unit, date } = req.body;
 
-        if (!value || !unit) {
-            return sendBadRequestResponse(res, 400, "Value and unit are required.");
+        if (!value || !unit || !date) {
+            return sendBadRequestResponse(res, 400, "Value, unit and date are required.");
         }
 
         const weight = await Weight.findById(req.params.id);
@@ -137,11 +137,11 @@ export const addRecord = async (req, res) => {
             return sendBadRequestResponse(res, "You are not authorized to update this weight...");
         }
 
-        const now = new Date();
-        const day = now.getDate();
+        const givenDate = new Date(date);
+        const day = givenDate.getDate();
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const month = monthNames[now.getMonth()];
-        const year = now.getFullYear();
+        const month = monthNames[givenDate.getMonth()];
+        const year = givenDate.getFullYear();
 
         const existingIndex = weight.history.findIndex(record =>
             record.unit === unit &&
@@ -149,7 +149,6 @@ export const addRecord = async (req, res) => {
             record.month === month &&
             record.year === year
         );
-
 
         if (existingIndex !== -1) {
             // Replace existing record
