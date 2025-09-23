@@ -3,6 +3,7 @@ import { ThrowError } from "../utils/ErrorUtils.js"
 import bcrypt from "bcryptjs";
 import nodemailer from "nodemailer"
 import { sendSuccessResponse, sendErrorResponse, sendBadRequestResponse, sendUnauthorizedResponse } from '../utils/ResponseUtils.js';
+import jwt from "jsonwebtoken"
 
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString();
 
@@ -182,11 +183,65 @@ export const changePassword = async (req, res) => {
     }
 };
 
-//logoutUser
-// export const logoutUser = async (req, res) => {
-//     try {
-//         return sendSuccessResponse(res, "User logout successfully...✅");
-//     } catch (error) {
-//         return sendErrorResponse(res, 400, error.message);
-//     }
-// };
+export const googleLogin = async (req, res) => {
+    try {
+        const { uid, name, email, avatar } = req.body;
+
+        if (!uid || !name || !email || !avatar) {
+            return res.status(400).json({
+                success: false,
+                message: "uid, name, email & avatar are required!"
+            });
+        }
+
+        let user = await Register.findOne({ email });
+
+        if (user) {
+            // Update user info if it changed
+            const updatedFields = {};
+            if (user.name !== name) updatedFields.name = name;
+            if (user.avatar !== avatar) updatedFields.avatar = avatar;
+            if (user.uid !== uid) updatedFields.uid = uid;
+
+            if (Object.keys(updatedFields).length > 0) {
+                user = await Register.findByIdAndUpdate(user._id, updatedFields, { new: true });
+            }
+        } else {
+            // Create new user
+            user = await Register.create({
+                uid,
+                name,
+                email,
+                avatar,
+                verified: true
+            });
+        }
+
+        // Generate JWT token
+        const payload = {
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role || 'user'
+        };
+
+        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "7d" });
+
+        return res.status(user.isNew ? 201 : 200).json({
+            success: true,
+            message: user.isNew
+                ? "New social login & registration successful"
+                : "Login successful",
+            user,
+            token
+        });
+
+    } catch (error) {
+        console.error("Social Register Error:", error.message);
+        return res.status(500).json({
+            success: false,
+            message: "Error while registering social user",
+            error: error.message
+        });
+    }
+};

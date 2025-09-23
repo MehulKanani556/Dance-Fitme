@@ -2,7 +2,7 @@ import express from 'express';
 import { upload, convertJfifToJpeg } from '../middlewares/imageupload.js';
 import { UserAuth, isAdmin, isPremiumUser, isUser } from '../middlewares/auth.js';
 import { createRegister, getRegisterById, updateRegister, deleteRegister, getAllUsers } from '../controllers/registerController.js';
-import { changePassword, forgotPassword, loginUser, resetPassword, VerifyEmail } from '../controllers/loginController.js';
+import { changePassword, forgotPassword, googleLogin, loginUser, resetPassword, VerifyEmail } from '../controllers/loginController.js';
 import { createPremiumPlan, getAllPremiumPlans, getPremiumPlanById, updatePremiumPlan, deletePremiumPlan } from '../controllers/premiumController.js';
 import { createClassCategory, deleteClassCategory, getAllClassCategory, getClassCategoryById, updateClassCategory } from '../controllers/classCategoryController.js';
 import { createContent, deleteContent, getAdvanced, getAllContent, getBeginner, getBestDanceClass, getContentByBellyDance, getContentByBoxing, getContentByClassCategoryId, getContentByDanceFitness, getContentByHipHop, getContentById, getContentByStyleId, getIntermediate, getJustReleasedContent, getNewArrivals, getTrendingPlans, incrementContentViews, updateContent } from '../controllers/contentController.js';
@@ -29,6 +29,7 @@ indexRouter.get('/getAllUsers', UserAuth, isAdmin, getAllUsers);
 
 // Login Routes
 indexRouter.post('/loginUser', loginUser);
+indexRouter.post('/googleLogin', googleLogin);
 indexRouter.post('/forgotPassword', forgotPassword);
 indexRouter.post('/VerifyEmail', VerifyEmail);
 indexRouter.post('/resetPassword', resetPassword);
