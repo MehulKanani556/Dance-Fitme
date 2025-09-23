@@ -56,7 +56,6 @@ indexRouter.put("/updatePayment/:id", UserAuth, isUser, updatePayment)
 indexRouter.delete("/deletePayment/:id", UserAuth, isUser, deletePayment)
 indexRouter.get('/getMySubscription', UserAuth, isUser, getMySubscription);
 
-
 // ClassCategory Routes
 indexRouter.post('/createClassCategory', UserAuth, isAdmin, upload.single("classCategory_image"), convertJfifToJpeg, createClassCategory);
 indexRouter.get('/getAllClassCategory', UserAuth, getAllClassCategory);
