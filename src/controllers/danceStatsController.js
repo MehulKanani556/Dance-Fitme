@@ -145,8 +145,15 @@ export const getWeeklyStats = async (req, res) => {
 export const getMonthlyStats = async (req, res) => {
     try {
         const userId = req.user._id;
-        const start = moment().startOf('month').toDate();
-        const end = moment().endOf('month').toDate();
+        let { month, year } = req.query;
+
+        // If no query passed → use current month & year
+        month = month ? parseInt(month) : moment().month() + 1;
+        year = year ? parseInt(year) : moment().year();
+
+        // Start & End of the requested month
+        const start = moment(`${year}-${month}`, "YYYY-M").startOf("month").toDate();
+        const end = moment(`${year}-${month}`, "YYYY-M").endOf("month").toDate();
 
         const stats = await DanceStats.find({
             userId,
@@ -164,13 +171,16 @@ export const getMonthlyStats = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Monthly stats fetched successfully.",
+            message: `Stats for ${month}-${year} fetched successfully.`,
+            month,
+            year,
             result,
             totalDanceTime,
             totalCaloriesBurned
         });
     } catch (err) {
-        return res.status(500).json({ success: false, message: "Server error" });
+        console.error("Error fetching monthly stats:", err);
+        return res.status(500).json({ success: false, message: "Server error", error: err.message });
     }
 };
 
