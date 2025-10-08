@@ -1,6 +1,6 @@
 import express from 'express';
 import { upload, convertJfifToJpeg } from '../middlewares/imageupload.js';
-import { UserAuth, isAdmin, isPremiumUser, isUser } from '../middlewares/auth.js';
+import { UserAuth, isAdmin, isUser } from '../middlewares/auth.js';
 import { createRegister, getRegisterById, updateRegister, deleteRegister, getAllUsers } from '../controllers/registerController.js';
 import { changePassword, forgotPassword, googleLogin, loginUser, resetPassword, VerifyEmail } from '../controllers/loginController.js';
 import { createPremiumPlan, getAllPremiumPlans, getPremiumPlanById, updatePremiumPlan, deletePremiumPlan } from '../controllers/premiumController.js';
@@ -73,10 +73,10 @@ indexRouter.delete('/deleteStyle/:id', UserAuth, isAdmin, deleteStyle);
 
 // Content Routes
 indexRouter.post('/createContent', UserAuth, isAdmin, upload.fields([{ name: 'content_image', maxCount: 1 }, { name: 'content_video', maxCount: 1 }]), convertJfifToJpeg, createContent);
-indexRouter.get('/getContentByClassCategoryId/:classCategoryId', UserAuth, isPremiumUser, getContentByClassCategoryId);
-indexRouter.get('/getContentByStyleId/:styleId', UserAuth, isPremiumUser, getContentByStyleId);
-indexRouter.get('/getAllContent', UserAuth, isPremiumUser, getAllContent);
-indexRouter.get('/getContentById/:id', UserAuth, isPremiumUser, getContentById);
+indexRouter.get('/getContentByClassCategoryId/:classCategoryId', UserAuth, getContentByClassCategoryId);
+indexRouter.get('/getContentByStyleId/:styleId', UserAuth, getContentByStyleId);
+indexRouter.get('/getAllContent', UserAuth, getAllContent);
+indexRouter.get('/getContentById/:id', UserAuth, getContentById);
 indexRouter.put('/updateContent/:id', UserAuth, isAdmin, upload.fields([{ name: 'content_image', maxCount: 1 }, { name: 'content_video', maxCount: 1 }]), convertJfifToJpeg, updateContent);
 indexRouter.delete('/deleteContent/:id', UserAuth, isAdmin, deleteContent);
 indexRouter.get('/getNewArrivals', UserAuth, getNewArrivals);
@@ -85,12 +85,12 @@ indexRouter.get('/getAdvanced', UserAuth, getAdvanced);
 indexRouter.get('/getIntermediate', UserAuth, getIntermediate);
 indexRouter.get('/getContentByDanceFitness', UserAuth, getContentByDanceFitness);
 indexRouter.get('/getContentByHipHop', UserAuth, getContentByHipHop);
-indexRouter.get('/getContentByBoxing', UserAuth, getContentByBoxing); 
-indexRouter.get('/getContentByBellyDance', UserAuth, getContentByBellyDance); 
+indexRouter.get('/getContentByBoxing', UserAuth, getContentByBoxing);
+indexRouter.get('/getContentByBellyDance', UserAuth, getContentByBellyDance);
 indexRouter.get('/getJustReleasedContent', UserAuth, getJustReleasedContent);
 indexRouter.get('/getBestDanceClass', UserAuth, getBestDanceClass);
 indexRouter.get('/getTrendingPlans', UserAuth, getTrendingPlans);
-indexRouter.post('/incrementContentViews/:contentId', UserAuth, isPremiumUser, incrementContentViews);
+indexRouter.post('/incrementContentViews/:contentId', UserAuth, incrementContentViews);
 
 // Weight Routes
 indexRouter.post('/createWeight', UserAuth, isUser, createWeight);
@@ -123,16 +123,16 @@ indexRouter.delete('/deletePlanDetails/:id', UserAuth, isAdmin, deletePlanDetail
 
 // PlanVideo Routes
 indexRouter.post('/createPlanVideo', UserAuth, isAdmin, upload.fields([{ name: 'plan_image', maxCount: 1 }, { name: 'plan_video', maxCount: 1 }]), convertJfifToJpeg, createPlanVideo);
-indexRouter.get('/getPlanVideoByPlanDetailsId/:planDetailsId', UserAuth, isPremiumUser, getPlanVideoByPlanDetailsId);
-indexRouter.get('/getAllPlanVideo', UserAuth, isPremiumUser, getAllPlanVideo);
-indexRouter.get('/getPlanVideoById/:id', UserAuth, isPremiumUser, getPlanVideoById);
+indexRouter.get('/getPlanVideoByPlanDetailsId/:planDetailsId', UserAuth, getPlanVideoByPlanDetailsId);
+indexRouter.get('/getAllPlanVideo', UserAuth, getAllPlanVideo);
+indexRouter.get('/getPlanVideoById/:id', UserAuth, getPlanVideoById);
 indexRouter.put('/updatePlanVideo/:id', UserAuth, isAdmin, upload.fields([{ name: 'plan_image', maxCount: 1 }, { name: 'plan_video', maxCount: 1 }]), convertJfifToJpeg, updatePlanVideo);
 indexRouter.delete('/deletePlanVideo/:id', UserAuth, isAdmin, deletePlanVideo);
 
 // OverView Routes
 indexRouter.post('/createOverviewVideo', UserAuth, isAdmin, createOverviewVideo);
-indexRouter.get('/getAllOverViewVideos', UserAuth, isPremiumUser, getAllOverViewVideos);
-indexRouter.get('/getOverViewById/:id', UserAuth, isPremiumUser, getOverViewById);
+indexRouter.get('/getAllOverViewVideos', UserAuth, getAllOverViewVideos);
+indexRouter.get('/getOverViewById/:id', UserAuth, getOverViewById);
 indexRouter.put('/updateOverViewVideo/:id', UserAuth, isAdmin, updateOverViewVideo);
 indexRouter.delete('/deleteOverViewVideo/:id', UserAuth, isAdmin, deleteOverViewVideo);
 indexRouter.get('/getOverViewByDay/:day_No', UserAuth, getOverViewByDay);
